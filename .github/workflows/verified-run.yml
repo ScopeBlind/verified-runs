@@ -47,6 +47,13 @@ jobs:
       - name: Install the sandbox Claude Code uses on Linux
         if: ${{ inputs.agent == 'claude' }}
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+      - name: Describe the Claude token (shape only, never the value)
+        if: ${{ inputs.agent == 'claude' }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          t="$CLAUDE_CODE_OAUTH_TOKEN"
+          echo "length ${#t}; starts with ${t:0:11}; ends with a newline: $([ "${t: -1}" = $'\n' ] && echo yes || echo no); contains whitespace: $(printf '%s' "$t" | grep -q '[[:space:]]' && echo yes || echo no)"
       - name: Let the agent's sandbox create its namespaces
         # Ubuntu 24.04 confines unprivileged user namespaces under AppArmor, which
         # denies the sandbox the capability it needs to bring up loopback. The
