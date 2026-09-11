@@ -2157,6 +2157,7 @@ function verifyActaChain(receipts, options = {}) {
       decision: str(payload.decision),
       reason: str(payload.reason) ?? str(payload.reason_code),
       policy_digest: str(payload.policy_digest),
+      credential_ref: str(payload.credential_ref),
       issued_at: str(payload.issued_at),
       spec: str(payload.spec),
       request_id: str(payload.request_id),
@@ -2492,6 +2493,28 @@ function compileStandard(draft, options = {}) {
     method: "evaluator",
     note: "Declared by the operator's gateway, not independently established."
   });
+  if (q.receiver_consumes_authorization) {
+    clauses.push({
+      id: "consumption",
+      source: "requirements.receiver_consumes_authorization",
+      requirement: "The destination consumes a single-use authorization before it commits",
+      interpretation: "Before committing, the destination verifies the gate's receipt as an authorization: signed by a gate key this standard accepts, an allow under this standard's policy, bound to these exact terms, fresh, and not yet spent. Its readback cites the receipt it consumed and the spend index. An effect without a cited authorization is a held result, not a completed one.",
+      evidence: "The signed readback's consumed-authorization block, checked against the bundle's receipt.",
+      method: "after_dispatch",
+      note: "The gateway cannot see the destination. This is the destination's own check, evidenced in its readback; the receiver must be one that consumes, not one that merely reads back."
+    });
+  }
+  for (const c of q.credentials_held_by_gate ?? []) {
+    clauses.push({
+      id: `credential_${c.tool}_${c.label}`,
+      source: "requirements.credentials_held_by_gate",
+      requirement: `Calls to ${c.tool} use the credential ${c.label} held by the gateway`,
+      interpretation: `The gateway holds the secret for ${c.label} and injects it at dispatch; every receipt for ${c.tool} records the label, never the value. The agent never holds a reusable credential.`,
+      evidence: `The credential_ref field on every ${c.tool} receipt.`,
+      method: "evaluator",
+      note: "Recorded by the gateway that injected it; that the agent had no other copy of the secret is a property of the deployment, not of the receipts."
+    });
+  }
   clauses.push(run ? {
     id: "effect",
     source: "requirements.effect_evidence",
@@ -3004,6 +3027,8 @@ function shapeErrors(v) {
     const al = q.action_limits;
     if (!isRecord2(al) || !isRecord2(al.amount_max) || typeof al.amount_max.amount !== "number" || !(al.amount_max.amount > 0) || typeof al.amount_max.currency !== "string" || !/^[A-Z]{3}$/.test(al.amount_max.currency) || al.per_instruction !== true) errors.push("action_limits malformed");
   }
+  if (isRecord2(q) && q.receiver_consumes_authorization !== void 0 && typeof q.receiver_consumes_authorization !== "boolean") errors.push("receiver_consumes_authorization must be a boolean");
+  if (isRecord2(q) && q.credentials_held_by_gate !== void 0 && !(Array.isArray(q.credentials_held_by_gate) && q.credentials_held_by_gate.every((c2) => isRecord2(c2) && typeof c2.tool === "string" && c2.tool.trim() && typeof c2.label === "string" && c2.label.trim()))) errors.push("credentials_held_by_gate malformed");
   if (isRecord2(q) && q.run !== void 0 && q.run !== null) {
     const r2 = q.run;
     const strs = (x) => Array.isArray(x) && x.every((s) => typeof s === "string" && s.trim());
@@ -3062,6 +3087,8 @@ function proofRequestReadback(r) {
   lines.push(`Environment: ${q.environment_class_min} or stronger`);
   lines.push(`Approval: ${APPROVER_ASSURANCE_LABELS[q.approver_assurance_min]}${q.human_approval.required_above ? `; a named person must approve above ${money2(q.human_approval.required_above.amount, q.human_approval.required_above.currency)}` : ""}${q.human_approval.distinct_approvers === 2 ? "; two distinct approvers" : ""}`);
   if (q.action_limits) lines.push(`Limit: each instruction at most ${money2(q.action_limits.amount_max.amount, q.action_limits.amount_max.currency)}, enforced by the gateway before the call runs`);
+  if (q.receiver_consumes_authorization) lines.push("Consumption: the destination checks and consumes a single-use authorization bound to the exact terms before it commits; its readback cites what it consumed");
+  if (q.credentials_held_by_gate?.length) lines.push(`Credentials: ${q.credentials_held_by_gate.map((c) => `${c.label} for ${c.tool}`).join(", ")} held by the gateway and injected; the agent never sees them`);
   if (q.run) {
     lines.push(`Run: tools ${q.run.allowed_tools.join(", ")} only, enforced by the gateway before each call; network to ${q.run.egress_allowlist.join(", ") || "nothing"} only, enforced by the environment; ${q.run.attempts_per_task} attempt${q.run.attempts_per_task === 1 ? "" : "s"} per task; ${Math.round(q.run.time_limit_seconds / 60)} minutes per task`);
     lines.push(`Run pins: task set ${q.run.dataset.name}${q.run.dataset.revision ? ` @ ${q.run.dataset.revision}` : ""} (${q.run.dataset.digest.slice(0, 19)}); harness ${q.run.harness.name} (${q.run.harness.digest.slice(0, 19)}); model route ${q.run.model_route}`);
@@ -3333,6 +3360,13 @@ function evaluateGatewayReceipts(input) {
   if (differs) does_not_establish.push(`${differs} receipt${differs === 1 ? "" : "s"} carr${differs === 1 ? "ies" : "y"} an input digest that does not match the call you supplied.`);
   if (bindings.some((b) => b.call === "not_carried")) does_not_establish.push("Some receipts carry no input digest, so which call they describe is not established (protect-mcp before the payload_digest change).");
   if (bindings.length && bindings.every((b) => b.call === "no_call_given")) does_not_establish.push("Which exact call each receipt describes: supply the calls to check the input digests.");
+  for (const c of standard.requirements.credentials_held_by_gate ?? []) {
+    const forTool = chain.receipts.filter((r) => r.tool === c.tool && r.decision === "allow");
+    if (!forTool.length) continue;
+    const labelled = forTool.filter((r) => r.credential_ref === c.label).length;
+    if (labelled === forTool.length) establishes.push(`Every allowed call to ${c.tool} (${forTool.length}) records the gateway's credential ${c.label}: the gateway injected it, and the receipt carries the label, not the value.`);
+    else does_not_establish.push(`${forTool.length - labelled} of ${forTool.length} allowed calls to ${c.tool} do not record the credential ${c.label} the standard says the gateway holds.`);
+  }
   if (other_clauses.length) does_not_establish.push(`Everything the gateway cannot see: ${other_clauses.filter((c) => c.method !== "human_review").slice(0, 5).map((c) => c.requirement.toLowerCase()).join("; ")}. Those are checked on the signed approval, the readback, or by a person, not by these receipts.`);
   does_not_establish.push(...chain.not_established.filter((n) => n.startsWith("Who holds")));
   const verdict = intact && signer === "accepted" && policy_binding === "matches" && standardVerification.cryptographically_valid ? "bound" : intact ? "partial" : "unbound";
