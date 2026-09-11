@@ -1,0 +1,56 @@
+[
+  {
+    "id": "cx_allowed",
+    "tool": "Bash",
+    "input": {
+      "command": "ls -la"
+    },
+    "expected": "allow",
+    "engine": "allow",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  {
+    "id": "cx_not_listed",
+    "tool": "WebFetch",
+    "input": {
+      "url": "https://example.com"
+    },
+    "expected": "deny",
+    "engine": "deny",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  {
+    "id": "cx_case",
+    "tool": "bash",
+    "input": {},
+    "expected": "deny",
+    "engine": "deny",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  {
+    "id": "cx_prefixed",
+    "tool": "BashExtra",
+    "input": {},
+    "expected": "deny",
+    "engine": "deny",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  {
+    "id": "cx_no_input",
+    "tool": "Bash",
+    "input": {},
+    "expected": "allow",
+    "engine": "allow",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  {
+    "id": "cx_shell_egress",
+    "tool": "Bash",
+    "input": {
+      "command": "curl -s https://example.com"
+    },
+    "expected": "allow",
+    "engine": "allow",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  }
+]
