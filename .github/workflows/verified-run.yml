@@ -1,0 +1,80 @@
+# A verified run in CI, with provenance.
+#
+# Runs one agent over a task set (the sealed set by default) with every tool
+# call through protect-mcp under the policy compiled from the signed standard,
+# checks the result as a reader would, and attests the three files with
+# GitHub's build provenance: `gh attestation verify manifest.json --owner scopeblind`.
+#
+# Needs: OPENAI_API_KEY (for --agent codex) or CLAUDE_CODE_OAUTH_TOKEN (for
+# --agent claude), and SEALED_TASKS_KEY to open the sealed set. Manual
+# dispatch only; nothing runs on push except the checks.
+name: verified-run
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'codex or claude'
+        default: codex
+      tasks:
+        description: 'comma-separated Terminal-Bench task ids, or sealed:<path>'
+        default: sealed:task-sets/terminal-bench-4.sealed.json
+      model:
+        description: 'model name for the agent'
+        default: gpt-5.5
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pytest==8.4.1
+      - run: npm ci
+      - name: Install the agent
+        run: |
+          if [ "${{ inputs.agent }}" = "codex" ]; then npm i -g @openai/codex && codex --version; else npm i -g @anthropic-ai/claude-code && claude --version; fi
+      - name: Sign the agent in with the API key
+        if: ${{ inputs.agent == 'codex' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: printenv OPENAI_API_KEY | codex login --with-api-key
+      - name: Let the agent's sandbox create its namespaces
+        # Ubuntu 24.04 confines unprivileged user namespaces under AppArmor, which
+        # denies the sandbox the capability it needs to bring up loopback. The
+        # sandbox itself is unchanged.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Verified run
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          LEGATE_ATTEST: github-actions-provenance
+        run: node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run"
+      - name: Check the run as a reader would
+        run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl"
+      - name: Attest provenance of the manifest, the receipt chain, and the standard
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/verified-run/manifest.json
+            ${{ runner.temp }}/verified-run/receipts.jsonl
+            ${{ runner.temp }}/verified-run/standard.json
+      - name: Keep the attestation bundles beside the run, so they can be checked offline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/verified-run/provenance" && cd "$RUNNER_TEMP/verified-run/provenance"
+          for f in manifest.json receipts.jsonl standard.json; do
+            gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$f.sigstore.jsonl"
+          done
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-run
+          path: ${{ runner.temp }}/verified-run

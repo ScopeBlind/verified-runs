@@ -1,0 +1,155 @@
+{
+  "type": "scopeblind.run_manifest.v1",
+  "version": 1,
+  "run_id": "run:1c3d2cc199a86f2a",
+  "standard": {
+    "request_id": "pr:7a1e5b9c3d2f4e60",
+    "digest": "139fb512e846baa08a654c6d3aaaf5c207b96da624aaf092433e15c73256a96f",
+    "recipient_key": "6c360b0c2def60adf93e97019f61df31d2670bbc3bfad933859dc1663c1d9eac",
+    "policy_digest": "sha256:b88a9487c62dbb63db713fecd6b39ceeddba3e54b05dbfb332de26394688374f"
+  },
+  "agent": {
+    "name": "codex-cli",
+    "version": "0.145.0",
+    "model": "gpt-5.5",
+    "model_route": "chatgpt.com (Codex)"
+  },
+  "harness": {
+    "name": "legate-verified-run",
+    "digest": "sha256:63092e4125ab179a17f793bcca3bcb847b9abd0efe282da3cf19b29ad79db201",
+    "gateway": "protect-mcp 0.13.3"
+  },
+  "dataset": {
+    "name": "terminal-bench/original-tasks",
+    "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+    "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c",
+    "task_count": 4
+  },
+  "environment": {
+    "sandbox": "Codex CLI sandbox, workspace-write, network disabled (macOS Seatbelt)",
+    "egress": [],
+    "attestation": null,
+    "note": "Demonstration run on a developer machine: the host's own sandbox stood in for the benchmark's Docker image; task paths were rebased from /app to a workspace and the tests were run with the same rebase."
+  },
+  "gateway": {
+    "key_id": "sb:issuer:GsAFpSRUAvaU",
+    "verification_key": "ebb8cf3efc78717c50e7c438c0ad5498f8fa4e09607fea1e030ac129b5965225",
+    "receipt_count": 30,
+    "chain_head": "sha256:7c6993ec34663bf9cc431c278e8432705853c14b1f12701ec7c3fd32d6a75df8",
+    "log_digest": "sha256:6736488b0e5886fbeec15e6ab29ddf328b1253ba5b206f5522f185036ff61f44"
+  },
+  "attempts": [
+    {
+      "task_id": "hello-world",
+      "attempt": 1,
+      "started_at": "2026-09-11T11:36:52.426Z",
+      "ended_at": "2026-09-11T11:37:06.590Z",
+      "receipts": {
+        "from": 0,
+        "to": 3
+      },
+      "calls": 3,
+      "refused": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 9.0.2, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:0b5e134bd7f1b055eaca6f667751b06c0314e911d3a4b677d10b9f2461a5f514"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      }
+    },
+    {
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "started_at": "2026-09-11T11:37:07.203Z",
+      "ended_at": "2026-09-11T11:37:37.963Z",
+      "receipts": {
+        "from": 3,
+        "to": 8
+      },
+      "calls": 5,
+      "refused": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 9.0.2, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:6867f2b02a119181aebd081f99246176bfea4d3253e305a24481ac89b89a1341"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      }
+    },
+    {
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "started_at": "2026-09-11T11:37:38.643Z",
+      "ended_at": "2026-09-11T11:38:32.996Z",
+      "receipts": {
+        "from": 8,
+        "to": 18
+      },
+      "calls": 10,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 9.0.2, run by the harness",
+        "passed": 1,
+        "failed": 0,
+        "output_digest": "sha256:44047f58f39859b539ba471232e29881c17c93cfd0a449058ae1bf46274cfa28"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      }
+    },
+    {
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "started_at": "2026-09-11T11:38:33.676Z",
+      "ended_at": "2026-09-11T11:39:26.454Z",
+      "receipts": {
+        "from": 18,
+        "to": 30
+      },
+      "calls": 12,
+      "refused": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 9.0.2, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:d8b5992425f9c0756c2a08faaf5deb75524e8134109ef6ccd882b484286e481b"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      }
+    }
+  ],
+  "summary": {
+    "tasks": 4,
+    "passed": 4,
+    "failed": 0,
+    "errored": 0,
+    "calls": 30,
+    "refused": 3
+  },
+  "signer": {
+    "name": "Legate verified-run harness (demo)",
+    "key_id": "harness:faef67591c23b631",
+    "verification_key": "33d3c584cbbb91063446ee05591b4226d15c464cefe7fb9e075cfc9db0910727"
+  },
+  "issued_at": "2026-09-11T11:39:27.229Z",
+  "nonce": "6b691ef25c74097697f299ab7feac810",
+  "digest": "d9afa3bf0241b89edbe36b27edb4320fde5ddab31a7196d5922cc1c86f3bf40f",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "88d9a529371b86c1ffcc79b00a7b61037c3ac1bd5719329607d3b58677bf1af0084d4fb93bc5b6c604f4c01a22ff86f4164a11f317281de07b08891e5d652c0a"
+  }
+}

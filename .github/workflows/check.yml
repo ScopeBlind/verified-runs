@@ -1,0 +1,15 @@
+# Every committed run is checked the way a reader would check it, and the
+# adversarial suite proves the verifier catches every mutation we can name.
+name: check
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run check
