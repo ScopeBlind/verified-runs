@@ -43,7 +43,8 @@ jobs:
         if: ${{ inputs.agent == 'codex' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: printenv OPENAI_API_KEY | codex login --with-api-key
+        # Pasted secrets carry stray whitespace more often than not; a key is never whitespace.
+        run: printf '%s' "$OPENAI_API_KEY" | tr -d '[:space:]' | codex login --with-api-key
       - name: Install the sandbox Claude Code uses on Linux
         if: ${{ inputs.agent == 'claude' }}
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
@@ -61,11 +62,13 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Verified run
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN_RAW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
           GH_TOKEN: ${{ github.token }}
           LEGATE_ATTEST: github-actions-provenance
-        run: node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run"
+        run: |
+          export CLAUDE_CODE_OAUTH_TOKEN="$(printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN_RAW" | tr -d '[:space:]')"
+          node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run"
       - name: Check the run as a reader would
         run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl"
       - name: Attest provenance of the manifest, the receipt chain, and the standard
