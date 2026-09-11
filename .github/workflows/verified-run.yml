@@ -44,6 +44,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: printenv OPENAI_API_KEY | codex login --with-api-key
+      - name: Install the sandbox Claude Code uses on Linux
+        if: ${{ inputs.agent == 'claude' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
       - name: Let the agent's sandbox create its namespaces
         # Ubuntu 24.04 confines unprivileged user namespaces under AppArmor, which
         # denies the sandbox the capability it needs to bring up loopback. The

@@ -56,6 +56,8 @@ The harness pins the task set (every file in each task directory except the refe
 
 ## Where the code comes from
 
+Every run pins the harness and the run core that made it. When those change, the bytes a run pins stay in the repository under `harness/harness-versions/<pin>/`, so a reader can always open exactly what ran; the check refuses a run whose pinned harness is neither current nor archived.
+
 `verify/legate-run.core.mjs` is built from the Legate site's own source and vendored here with its digest; `harness.json` in every run records the digest of the harness file and the core together, and the standard pins it. The verifier is [`@veritasacta/verify`](https://www.npmjs.com/package/@veritasacta/verify), Apache-2.0. The gateway is protect-mcp, MIT.
 
 ## License

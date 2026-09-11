@@ -96,9 +96,16 @@ for (const dir of sampleDirs) {
   // 6. The pins recompute.
   ok('the task-set digest recomputes from the pinned paths and hashes', m.taskSetDigest(taskSet.name, taskSet.revision, taskSet.tasks) === taskSet.digest && taskSet.digest === standard.requirements.run.dataset.digest);
   ok('the task set carries hashes, not benchmark files', taskSet.tasks.every((t) => t.files.every((f) => typeof f.sha256 === 'string' && !('content' in f))));
-  const harnessFiles = [{ name: 'verified-run.mjs', sha256: sha256Bytes(readFileSync(harnessPath)) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(readFileSync(corePath)) }];
-  const harnessNow = `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-verified-run', files: harnessFiles }))}`;
-  ok('the harness and the run core on disk are what the standard pins (a changed harness means the run must be made again)', harnessNow === standard.requirements.run.harness.digest);
+  // The exact harness bytes a run pins must be in the repository: the current files, or an archived earlier
+  // version under harness-versions/<first 16 hex of the pin>/ (both files), so a reader can always open what ran.
+  const pin = standard.requirements.run.harness.digest;
+  const digestOf = (h, c) => `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-verified-run', files: [{ name: 'verified-run.mjs', sha256: sha256Bytes(h) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(c) }] }))}`;
+  const archived = join(dirname(harnessPath), 'harness-versions', pin.slice('sha256:'.length, 'sha256:'.length + 16));
+  const harnessBytes = digestOf(readFileSync(harnessPath), readFileSync(corePath)) === pin ? { h: readFileSync(harnessPath), c: readFileSync(corePath), where: 'current' }
+    : existsSync(join(archived, 'verified-run.mjs')) && existsSync(join(archived, 'legate-run.core.mjs')) ? { h: readFileSync(join(archived, 'verified-run.mjs')), c: readFileSync(join(archived, 'legate-run.core.mjs')), where: archived } : null;
+  ok(`the harness and run core the standard pins are in the repository (${harnessBytes?.where === 'current' ? 'the current files' : harnessBytes ? 'archived under harness-versions' : 'MISSING: archive the harness that made this run, or make the run again'})`, harnessBytes !== null && digestOf(harnessBytes.h, harnessBytes.c) === pin);
+  const harnessFiles = [{ name: 'verified-run.mjs', sha256: sha256Bytes(harnessBytes.h) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(harnessBytes.c) }];
+  const harnessNow = pin;
   const harnessJson = read('harness.json');
   ok('harness.json records the same pin and the same two files', harnessJson.digest === harnessNow && harnessJson.files.every((f) => harnessFiles.some((g) => g.name === f.name && g.sha256 === f.sha256)));
   ok('the harness key that signed the manifest is one the standard accepts as a readback source', standard.trust.accepted_readback_sources.includes(manifest.signer.verification_key));

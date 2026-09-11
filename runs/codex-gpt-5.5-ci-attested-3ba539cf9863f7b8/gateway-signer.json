@@ -1,0 +1,5 @@
+{
+  "kid": "sb:issuer:GsAFpSRUAvaU",
+  "public_key": "ebb8cf3efc78717c50e7c438c0ad5498f8fa4e09607fea1e030ac129b5965225",
+  "note": "Demonstration gateway key: the seed is public (gateway-demo-key.ts). Real signatures, demo identity."
+}

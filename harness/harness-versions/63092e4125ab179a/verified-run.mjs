@@ -386,10 +386,7 @@ try {
     const ended = new Date();
     const to = receiptCount();
     // An agent that finished with no receipted call did its work outside the gate; that is not a governed run, whatever the tests say.
-    if (to === from) {
-      const tail = (s) => String(s ?? '').trim().split('\n').filter((l) => !/^(warning|20\d\d-)/.test(l)).slice(-6).join(' | ').slice(0, 900);
-      throw new Error(`${task.id}: no governed call was receipted; the gate hook did not run. Nothing is written.\n  agent exit ${run.exit_code}${run.timed_out ? ' (timed out)' : ''}\n  agent stdout: ${tail(run.stdout) || '(empty)'}\n  agent stderr: ${tail(run.stderr) || '(empty)'}`);
-    }
+    if (to === from) throw new Error(`${task.id}: no governed call was receipted; the gate hook did not run. Nothing is written.`);
     if (run.stderr.trim()) console.log(`    agent stderr: ${run.stderr.trim().split('\n').filter((l) => !/^(warning|20\d\d-)/.test(l)).slice(-3).join(' | ').slice(0, 300)}`);
     // The harness runs the task's tests, rebased like the instruction.
     const testsDir = join(ws, '.legate-tests'); mkdirSync(testsDir);

@@ -1,0 +1,5 @@
+{
+  "key_id": "harness:faef67591c23b631",
+  "public_key": "33d3c584cbbb91063446ee05591b4226d15c464cefe7fb9e075cfc9db0910727",
+  "note": "Demonstration harness key: the seed is public (run-manifest.ts). Real signatures, demo identity."
+}
