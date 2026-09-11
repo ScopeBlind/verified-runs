@@ -11,9 +11,11 @@
     "run:claude": "node harness/verified-run.mjs --agent claude --tasks sealed:task-sets/terminal-bench-4.sealed.json --out runs/local"
   },
   "dependencies": {
-    "@veritasacta/verify": "^0.10.1",
+    "@veritasacta/verify": "^0.10.2",
     "esbuild": "^0.25.0",
-    "protect-mcp": "^0.13.2"
+    "protect-mcp": "^0.13.3"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
