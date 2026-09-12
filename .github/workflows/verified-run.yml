@@ -64,6 +64,8 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN_RAW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           NEARAI_CLOUD_API_KEY: ${{ secrets.NEARAI_CLOUD_API_KEY }}
+          LEGATE_MAINTAINER_SEED: ${{ secrets.LEGATE_MAINTAINER_SEED }}
+          LEGATE_GRADER_SEED: ${{ secrets.LEGATE_GRADER_SEED }}
           SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
           GH_TOKEN: ${{ github.token }}
           LEGATE_ATTEST: github-actions-provenance
@@ -121,6 +123,7 @@ jobs:
       - name: Second grading
         env:
           SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
+          LEGATE_GRADER_SEED: ${{ secrets.LEGATE_GRADER_SEED }}
           GH_TOKEN: ${{ github.token }}
         run: |
           tasks='${{ inputs.tasks }}'

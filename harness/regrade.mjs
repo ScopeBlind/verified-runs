@@ -89,7 +89,7 @@ for (const attempt of manifest.attempts) {
 const agree = results.every((r) => manifest.attempts.find((a) => a.task_id === r.task_id && a.attempt === r.attempt)?.verdict === r.verdict);
 console.log(agree ? `regrade agrees with the manifest on all ${results.length} attempt(s)` : 'regrade DISAGREES with the manifest');
 if (sign) {
-  const grader = m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
+  const grader = process.env.LEGATE_GRADER_SEED ? m.runSignerFromPrivate(Buffer.from(process.env.LEGATE_GRADER_SEED.trim(), 'hex'), 'ScopeBlind verified-runs grader') : m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
   const ci = process.env.GITHUB_ACTIONS && process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null;
   const regrade = m.createRunRegrade({ manifest, results, environment: { sandbox: ci ? `GitHub Actions runner (${process.platform}), separate job` : `developer machine (${process.platform})`, note: ci ? `Second grading in ${ci}; the tests were obtained ${sealedPath ? 'from the sealed archive' : 'from the benchmark repository at the pinned commit'} and checked against the pin.` : `Second grading on a developer machine; the tests were obtained ${sealedPath ? 'from the sealed archive' : 'from the benchmark repository at the pinned commit'} and checked against the pin.` } }, grader, new Date());
   writeFileSync(outPath, `${JSON.stringify(regrade, null, 2)}\n`);

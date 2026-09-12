@@ -215,6 +215,12 @@ const AGENTS = {
 };
 const agent = AGENTS[agentName];
 if (!agent) { console.error(`unknown agent ${agentName}; one of ${Object.keys(AGENTS).join(', ')}`); process.exit(1); }
+// --keys demo|ephemeral: ephemeral by default in an attested run (the provenance binds them), demonstration keys otherwise.
+const keyMode = flag('--keys', process.env.LEGATE_ATTEST === 'github-actions-provenance' ? 'ephemeral' : 'demo');
+if (!['demo', 'ephemeral'].includes(keyMode)) { console.error(`--keys must be demo or ephemeral, not ${keyMode}`); process.exit(1); }
+const gatewayKey = keyMode === 'ephemeral' ? m.gatewayKeyFromPrivate(randomBytes(32).toString('hex')) : { privateKey: m.GATEWAY_DEMO_SEED, publicKey: m.GATEWAY_DEMO_PUBLIC_KEY, kid: m.GATEWAY_DEMO_KID };
+// Repositories whose workflows the standard accepts as second graders by provenance (--accept-grader-repo, repeatable); in CI, this repository by default.
+const acceptedGraderRepos = [...new Set([...(process.env.GITHUB_ACTIONS && process.env.GITHUB_REPOSITORY ? [`https://github.com/${process.env.GITHUB_REPOSITORY}`] : []), ...args.flatMap((a, i) => (a === '--accept-grader-repo' && args[i + 1] ? [args[i + 1]] : []))])];
 const apiKey = process.env.NEARAI_CLOUD_API_KEY ?? '';
 if (agent.model_attestation && !apiKey) { console.error('the attested agent needs NEARAI_CLOUD_API_KEY (an API key for the attested inference provider)'); process.exit(1); }
 function hasBwrap() { return process.platform === 'linux' && spawnSync('bwrap', ['--version'], { encoding: 'utf8' }).status === 0; }
@@ -449,17 +455,23 @@ try {
   const protectVersion = spawnSync('node', [cli, 'version'], { encoding: 'utf8' }).stdout.trim();
   // The harness key signs the manifest and the grader key signs a second grading; the standard names both as accepted
   // readback sources, so a manifest or a regrade under any other key does not bind, and a regrade under the harness key is not a second party.
-  const signer = m.runSignerFromSeed('legate-verified-run', 'Legate verified-run harness (demo)');
-  const grader = m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
+  // Keys. In an attested run the gateway key and the harness key are ephemeral: generated here, held only by this
+  // process (the gateway key is written to the runner's temporary directory for the gate process and discarded
+  // with it), and named by the standard and the manifest that the provenance binds to this run. The maintainer key
+  // and the grader key are persistent and held as repository secrets (LEGATE_MAINTAINER_SEED, LEGATE_GRADER_SEED);
+  // their verification keys are published beside the repository. Without those, demonstration keys with public seeds.
+  const signer = keyMode === 'ephemeral' ? m.runSignerFromPrivate(randomBytes(32), 'Legate verified-run harness (ephemeral, held by the workflow run)') : m.runSignerFromSeed('legate-verified-run', 'Legate verified-run harness (demo)');
+  const grader = process.env.LEGATE_GRADER_SEED ? m.runSignerFromPrivate(Buffer.from(process.env.LEGATE_GRADER_SEED.trim(), 'hex'), 'ScopeBlind verified-runs grader') : m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
 
   // 3. The standard, signed by the maintainer key, compiled to the policy the gate enforces.
   const NOW = new Date('2026-09-11T00:00:00.000Z');
   const FAR = '2027-12-31T00:00:00.000Z';
-  const maintainer = m.recipientKeyFromSeed('benchmark-maintainer', 'Benchmark maintainer', 'Terminal-Bench (demo)');
+  const maintainer = process.env.LEGATE_MAINTAINER_SEED ? m.recipientKeyFromPrivate(Buffer.from(process.env.LEGATE_MAINTAINER_SEED.trim(), 'hex'), 'verified-runs maintainer', 'ScopeBlind') : m.recipientKeyFromSeed('benchmark-maintainer', 'Benchmark maintainer', 'Terminal-Bench (demo)');
+  const realKeys = Boolean(process.env.LEGATE_MAINTAINER_SEED);
   const draft = {
     ...m.baseProofRequestDraft(NOW),
-    operator: { name: 'Submitter (demo run)' },
-    decision: { kind: 'reliance', owner: 'Benchmark maintainer', statement: 'Rely on this run\'s score as a verified run of the pinned task set', purpose: 'Leaderboard entry' },
+    operator: { name: keyMode === 'ephemeral' ? 'ScopeBlind verified-runs workflow' : 'Submitter (demo run)' },
+    decision: { kind: 'reliance', owner: realKeys ? 'ScopeBlind verified-runs maintainer' : 'Benchmark maintainer', statement: 'Rely on this run\'s score as a verified run of the pinned task set', purpose: 'Leaderboard entry' },
     boundary: { workflow: 'Benchmark run', action_class: 'tool_call', resources: ['the task workspace'], destinations: [], period: { starts_at: NOW.toISOString(), ends_at: FAR } },
     requirements: {
       environment_class_min: 'sandbox', approver_assurance_min: 'policy_automatic',
@@ -467,7 +479,7 @@ try {
       coverage: 'governed_route', effect_evidence: 'independently_reconciled', anchoring: 'self_attested', partial_settlement_permitted: false,
       run: { allowed_tools: agent.allowed_tools, egress_allowlist: agent.egress, attempts_per_task: 1, dataset: { name: datasetName, revision: datasetRevision, digest: datasetDigest }, harness: { name: 'legate-verified-run', digest: harnessDigest }, time_limit_seconds: timeLimit, model_route: agent.model_route, ...(agent.model_attestation ? { model_attestation: agent.model_attestation } : {}) },
     },
-    trust: { accepted_gate_keys: [m.GATEWAY_DEMO_PUBLIC_KEY], accepted_approver_keys: [], accepted_readback_sources: [signer.verification_key, grader.verification_key], accepted_anchor_witnesses: [] },
+    trust: { accepted_gate_keys: [gatewayKey.publicKey], accepted_approver_keys: [], accepted_readback_sources: [signer.verification_key, grader.verification_key], accepted_anchor_witnesses: [], ...(acceptedGraderRepos.length ? { accepted_grader_provenance: acceptedGraderRepos.map((repository) => ({ kind: 'github-actions-provenance', repository })) } : {}) },
     disclosure: { required_fields: ['tool calls', 'verdicts', 'chain head'], inspection: 'on_request' },
     limitations_permitted: ['The agent\'s own sandbox stands in for the benchmark\'s Docker image; task paths are rebased from /app to the workspace and the tests are run with the same rebase', 'The gate clock is accepted as the dispatch time', 'No environment attestation is required for a demonstration run', 'Demonstration keys sign the standard, the receipts, the manifest, and the regrade; they prove the mechanism, not identity', 'The second grading may run in the same continuous-integration account as the first, under a distinct key and job; a grading by a third party is stronger and the archived workspace makes it possible'],
     rejection_criteria: ['Any tool call not on the allowed list that the gate allowed', 'Any gap in the receipt chain', 'More than one attempt per task', 'Any pass the agent reports that the harness\'s tests do not reproduce'],
@@ -497,7 +509,7 @@ try {
 
   // 4. The gateway key and the shared receipt log.
   const keyPath = join(tmp, 'gateway-key.json');
-  writeFileSync(keyPath, JSON.stringify({ privateKey: m.GATEWAY_DEMO_SEED, publicKey: m.GATEWAY_DEMO_PUBLIC_KEY, kid: m.GATEWAY_DEMO_KID }));
+  writeFileSync(keyPath, JSON.stringify({ privateKey: gatewayKey.privateKey, publicKey: gatewayKey.publicKey, kid: gatewayKey.kid }));
   const receiptsDir = join(tmp, 'receipts'); mkdirSync(receiptsDir);
   const logPath = join(receiptsDir, 'receipts.jsonl');
   const receiptCount = () => (existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean).length : 0);
@@ -595,7 +607,7 @@ try {
         ? `Run in GitHub Actions (${ciRunUrl})${process.env.LEGATE_ATTEST === 'github-actions-provenance' ? '; the provenance attestations for manifest.json, receipts.jsonl, standard.json, and the second grading are on that run and kept beside it under provenance/, where the verifier consumes them' : '; no provenance attestation was persisted for this repository, so the sandbox and egress are the harness\'s declaration'}. Task paths were rebased from /app to a workspace and the tests were run with the same rebase.`
         : 'Demonstration run on a developer machine: the host\'s own sandbox stood in for the benchmark\'s Docker image; task paths were rebased from /app to a workspace and the tests were run with the same rebase.',
     },
-    gateway: { key_id: m.GATEWAY_DEMO_KID, verification_key: m.GATEWAY_DEMO_PUBLIC_KEY, receipt_count: receipts.length, chain_head: receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null, log_digest: m.fileDigest(logText), calls_digest: m.fileDigest(callsText), calls_disclosed: discloseCalls },
+    gateway: { key_id: gatewayKey.kid, verification_key: gatewayKey.publicKey, receipt_count: receipts.length, chain_head: receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null, log_digest: m.fileDigest(logText), calls_digest: m.fileDigest(callsText), calls_disclosed: discloseCalls },
     attempts,
     summary: { tasks: new Set(attempts.map((a) => a.task_id)).size, passed: attempts.filter((a) => a.verdict === 'pass').length, failed: attempts.filter((a) => a.verdict === 'fail').length, errored: attempts.filter((a) => a.verdict === 'error').length, calls: attempts.reduce((n, a) => n + a.calls, 0), refused: attempts.reduce((n, a) => n + a.refused, 0) },
   };
@@ -604,7 +616,7 @@ try {
   // Without a second grading the standard's verdict-evidence check is open by design; everything else must bind.
   const open = verification.checks.filter((c) => !c.ok && !c.informational && c.id !== 'verdict_evidence');
   if (open.length) {
-    const chain = m.verifyActaChain(receipts, { publicKeyHex: m.GATEWAY_DEMO_PUBLIC_KEY });
+    const chain = m.verifyActaChain(receipts, { publicKeyHex: gatewayKey.publicKey });
     const bad = chain.receipts.filter((r) => r.signature !== 'valid' || !['genesis', 'linked', 'ok'].includes(String(r.link))).map((r) => `#${r.index} ${r.tool ?? '?'} signature=${r.signature} link=${String(r.link)}`);
     throw new Error(`the manifest does not bind: ${verification.checks.filter((c) => !c.ok).map((c) => `${c.label}: ${c.detail}`).join('; ')}${bad.length ? `\n  receipts at fault: ${bad.join('; ')}` : ''}`);
   }
@@ -632,8 +644,9 @@ try {
   writeFileSync(join(outDir, 'task-set.json'), json(taskSet));
   writeFileSync(join(outDir, 'harness.json'), json({ name: 'legate-verified-run', digest: harnessDigest, files: harnessFiles, gateway: `protect-mcp ${protectVersion}`, rule: 'The digest is over the canonical JSON of {name, files:[{name, sha256}]}; the files are the harness and the run core it runs on.' }));
   writeFileSync(join(outDir, 'oracle.json'), json(oracle));
-  writeFileSync(join(outDir, 'gateway-signer.json'), json({ kid: m.GATEWAY_DEMO_KID, public_key: m.GATEWAY_DEMO_PUBLIC_KEY, note: 'Demonstration gateway key: the seed is public (gateway-demo-key.ts). Real signatures, demo identity.' }));
-  writeFileSync(join(outDir, 'harness-signer.json'), json({ key_id: signer.key_id, public_key: signer.verification_key, note: 'Demonstration harness key: the seed is public (run-manifest.ts). Real signatures, demo identity.' }));
+  writeFileSync(join(outDir, 'gateway-signer.json'), json({ kid: gatewayKey.kid, public_key: gatewayKey.publicKey, note: keyMode === 'ephemeral' ? 'Ephemeral gateway key: generated inside this run, written only to the runner\'s temporary directory for the gate process, and discarded with it. Real signatures; the provenance binds the manifest that names it to the workflow run.' : 'Demonstration gateway key: the seed is public (gateway-demo-key.ts). Real signatures, demo identity.' }));
+  writeFileSync(join(outDir, 'maintainer-key.json'), json({ key_id: maintainer.key_id, public_key: maintainer.verification_key, name: maintainer.name, organization: maintainer.organization, note: realKeys ? 'The maintainer key that signed the standard: held as a repository secret (LEGATE_MAINTAINER_SEED), its verification key published at the repository root as maintainer-key.json. Pin it through a channel you trust.' : 'Demonstration maintainer key: the seed is public (proof-request.ts). Real signatures, demo identity.' }));
+  writeFileSync(join(outDir, 'harness-signer.json'), json({ key_id: signer.key_id, public_key: signer.verification_key, note: keyMode === 'ephemeral' ? 'Ephemeral harness key: generated inside this run and held only by the harness process. Real signatures; the provenance binds the manifest it signed to the workflow run.' : 'Demonstration harness key: the seed is public (run-manifest.ts). Real signatures, demo identity.' }));
   for (const [id, output] of Object.entries(testOutputs)) writeFileSync(join(outDir, 'tests', `${id}.txt`), output);
   writeFileSync(join(outDir, 'README.md'), [
     '# A verified run',

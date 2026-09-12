@@ -1,0 +1,12 @@
+{
+  "role": "maintainer",
+  "name": "verified-runs maintainer",
+  "organization": "ScopeBlind",
+  "key_id": "recipient:e1b6a9c5f64f7310",
+  "public_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f",
+  "algorithm": "Ed25519",
+  "held": "GitHub Actions secret LEGATE_MAINTAINER_SEED on ScopeBlind/verified-runs (the seed never leaves the workflow); a copy in the maintainer's key store",
+  "signs": "the run standard (scopeblind.proof_request.v1) of every run made by the workflow",
+  "published": "https://github.com/ScopeBlind/verified-runs/blob/main/maintainer-key.json",
+  "since": "2026-09-12"
+}

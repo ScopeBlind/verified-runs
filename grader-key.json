@@ -1,0 +1,11 @@
+{
+  "role": "grader",
+  "name": "ScopeBlind verified-runs grader",
+  "key_id": "harness:c9f76087922bdbbb",
+  "public_key": "df5226e53373611b20f0ffa5dcff1495b8126d237ccd58821b411ec0f1bfe45f",
+  "algorithm": "Ed25519",
+  "held": "GitHub Actions secret LEGATE_GRADER_SEED on ScopeBlind/verified-runs, used only by the regrade job",
+  "signs": "the second grading (scopeblind.run_regrade.v1) of every run made by the workflow",
+  "published": "https://github.com/ScopeBlind/verified-runs/blob/main/grader-key.json",
+  "since": "2026-09-12"
+}

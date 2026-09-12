@@ -3293,6 +3293,11 @@ var GATEWAY_DEMO_SEED = bytesToHex2(sha2562(utf8ToBytes("scopeblind:legate:demo-
 var GATEWAY_DEMO_PUBLIC_KEY = bytesToHex2(ed25519.getPublicKey(hexToBytes2(GATEWAY_DEMO_SEED)));
 var GATEWAY_DEMO_KID = sbIssuerKid(GATEWAY_DEMO_PUBLIC_KEY);
 var GATEWAY_DEMO_LABEL = "Demo gateway (protect-mcp)";
+function gatewayKeyFromPrivate(seedHex) {
+  const publicKey = bytesToHex2(ed25519.getPublicKey(hexToBytes2(seedHex)));
+  return { privateKey: seedHex, publicKey, kid: sbIssuerKid(publicKey) };
+}
+var isDemoGatewayKey = (publicKeyHex) => publicKeyHex.toLowerCase() === GATEWAY_DEMO_PUBLIC_KEY.toLowerCase();
 
 // ../src/claim-v211-json.ts
 var CLAIMS_JSON_LIMITS = {
@@ -3667,6 +3672,7 @@ function shapeErrors(v) {
   }
   const t = v.trust;
   if (!isRecord2(t) || !["accepted_gate_keys", "accepted_approver_keys", "accepted_readback_sources", "accepted_anchor_witnesses"].every((k) => Array.isArray(t[k]) && t[k].every((x) => typeof x === "string" && HEX_642.test(x)))) errors.push("trust lists must be hex Ed25519 public keys");
+  if (isRecord2(t) && t.accepted_grader_provenance !== void 0 && !(Array.isArray(t.accepted_grader_provenance) && t.accepted_grader_provenance.every((g) => isRecord2(g) && g.kind === "github-actions-provenance" && typeof g.repository === "string" && /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(g.repository)))) errors.push("accepted_grader_provenance malformed");
   const disc = v.disclosure;
   if (!isRecord2(disc) || !Array.isArray(disc.required_fields) || !["not_required", "on_request", "required_before_acceptance"].includes(disc.inspection)) errors.push("disclosure malformed");
   for (const k of ["limitations_permitted", "rejection_criteria", "hold_criteria"]) if (!Array.isArray(v[k]) || !v[k].every((x) => typeof x === "string")) errors.push(`${k} must be a list of sentences`);
@@ -6022,6 +6028,17 @@ var PROVENANCE_FILES = { manifest: "manifest.json", receipts: "receipts.jsonl", 
 function workspaceDigest(files) {
   return `sha256:${sha256Hex(canonicalize({ files: [...files].map((f) => ({ path: f.path, sha256: f.sha256 })).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) }))}`;
 }
+function regradeProvenanceIdentity(context) {
+  const prov = context.provenance ?? null;
+  const bytes = prov?.bytes?.regrade;
+  if (!prov || bytes === void 0) return null;
+  const digest = subjectDigest(bytes);
+  for (const b of prov.bundles) {
+    const r = verifySigstoreBundle(b, {});
+    if (r.valid && r.statement?.subjects.some((s) => s.sha256 === digest)) return r.identity;
+  }
+  return null;
+}
 function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()) {
   const checks = [];
   const errors = shapeErrors2(value);
@@ -6211,15 +6228,23 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
     const rv = verifyRunRegrade(regrade);
     const rg = regrade;
     const sameRun = rv.valid && rg.manifest_digest === m.digest && rg.run_id === m.run_id;
-    const graderAccepted = Boolean(std) && sameRun && std.trust.accepted_readback_sources.map((k) => k.toLowerCase()).includes(rg.grader.verification_key.toLowerCase());
+    const graderByKey = Boolean(std) && sameRun && std.trust.accepted_readback_sources.map((k) => k.toLowerCase()).includes(rg.grader.verification_key.toLowerCase());
+    const regradeIdentity = regradeProvenanceIdentity(context);
+    const acceptedGraderRepos = (std?.trust.accepted_grader_provenance ?? []).filter((g) => g.kind === "github-actions-provenance").map((g) => g.repository.toLowerCase());
+    const graderByProvenance = Boolean(std) && sameRun && regradeIdentity?.repository !== null && regradeIdentity?.repository !== void 0 && acceptedGraderRepos.includes(regradeIdentity.repository.toLowerCase());
+    const graderAccepted = graderByKey || graderByProvenance;
+    const runRepo = m.environment.attestation ? /^https:\/\/github\.com\/[^/]+\/[^/]+/.exec(m.environment.attestation.reference)?.[0] ?? null : null;
+    const otherIdentity = Boolean(regradeIdentity?.repository && runRepo && regradeIdentity.repository.toLowerCase() !== runRepo.toLowerCase());
+    const madeBy = regradeIdentity ? `, made by ${(regradeIdentity.workflow ?? regradeIdentity.repository ?? "").replace(/^https:\/\/github\.com\//, "")}${otherIdentity ? " (a different repository from the run's)" : runRepo ? " (the run's own repository, a separate job)" : ""}` : "";
     const distinct = sameRun && rg.grader.verification_key.toLowerCase() !== m.signer.verification_key.toLowerCase();
     const agrees = sameRun && m.attempts.every((t) => {
       const r = rg.results.find((x) => x.task_id === t.task_id && x.attempt === t.attempt);
       return Boolean(r) && r.verdict === t.verdict && (!t.workspace || r.workspace_digest === t.workspace.digest);
     });
     reconciled = sameRun && graderAccepted && distinct && agrees;
-    checks.push({ id: "regrade", label: "Second grading", ok: reconciled, detail: !rv.valid ? rv.detail : !sameRun ? "The regrade is for a different manifest." : !std ? "Supply the standard to check the grader key." : !graderAccepted ? "The grader key is not one the standard accepts." : !distinct ? "The regrade was signed by the same key as the manifest; that is not a second party." : !agrees ? "The second grading disagrees with the manifest on at least one verdict or workspace." : `A second grading under key ${rg.grader.key_id}, from the archived workspaces with the pinned tests, agrees with every verdict.` });
+    checks.push({ id: "regrade", label: "Second grading", ok: reconciled, detail: !rv.valid ? rv.detail : !sameRun ? "The regrade is for a different manifest." : !std ? "Supply the standard to check the grader key." : !graderAccepted ? "The grader key is not one the standard accepts, and the regrade carries no verified provenance from a repository the standard accepts." : !distinct ? "The regrade was signed by the same key as the manifest; that is not a second party." : !agrees ? "The second grading disagrees with the manifest on at least one verdict or workspace." : `A second grading under key ${rg.grader.key_id}${graderByKey ? "" : " (accepted by its provenance identity)"}${madeBy}, from the archived workspaces with the pinned tests, agrees with every verdict.` });
     bound &&= reconciled;
+    if (reconciled) establishes.push(`The verdicts were graded twice: by the harness, and again${madeBy || " by a second grader under a distinct key"}; the two agree on every verdict and workspace.`);
   }
   if (std) {
     const level = std.requirements.effect_evidence;
@@ -6241,6 +6266,8 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
     const manifestDigest = prov.bytes?.manifest !== void 0 ? subjectDigest(prov.bytes.manifest) : null;
     const results = [];
     let allOk = true;
+    const graderRepos = (std?.trust.accepted_grader_provenance ?? []).filter((g) => g.kind === "github-actions-provenance").map((g) => g.repository.toLowerCase());
+    const fromAcceptedGrader = (r) => Boolean(r.identity?.repository && graderRepos.includes(r.identity.repository.toLowerCase()));
     for (const b of prov.bundles) {
       let key;
       try {
@@ -6257,11 +6284,11 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
       const namesManifest = manifestDigest !== null && (r.statement?.subjects.some((s) => s.sha256 === manifestDigest) ?? false);
       const foreign = cryptoOk && identity !== null && !identity.ok && !namesManifest;
       for (const c of r.checks) {
-        if (c.id === "identity" && foreign) checks.push({ id: `provenance_${n}_identity`, label: `Provenance ${n}: Identity`, ok: true, informational: true, detail: `Made in another run, so it does not count for this manifest (${c.detail})` });
+        if (c.id === "identity" && foreign) checks.push({ id: `provenance_${n}_identity`, label: `Provenance ${n}: Identity`, ok: true, informational: true, detail: fromAcceptedGrader(r) ? `Made by a grader repository the standard accepts, not by the run itself (${c.detail})` : `Made in another run, so it does not count for this manifest (${c.detail})` });
         else checks.push({ id: `provenance_${n}_${c.id}`, label: `Provenance ${n}: ${c.label}`, ok: c.ok, detail: c.detail });
       }
       const counts = cryptoOk && (identity?.ok ?? true);
-      results.push({ r, counts });
+      results.push({ r, counts, grader: cryptoOk && fromAcceptedGrader(r) });
       if (!cryptoOk || !foreign && identity !== null && !identity.ok) allOk = false;
     }
     const covered = [];
@@ -6274,7 +6301,7 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
       }
       const digest = subjectDigest(bytes);
       const names = (x) => x.r.statement?.subjects.some((s) => s.sha256 === digest) ?? false;
-      const idx = results.findIndex((x) => x.counts && names(x));
+      const idx = results.findIndex((x) => (x.counts || role === "regrade" && x.grader) && names(x));
       const found = idx >= 0;
       const foreignOnly = !found && results.some((x) => !x.counts && names(x));
       if (found) covered.push(role);
@@ -6296,7 +6323,11 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
     if (std) establishes.push(`The run was under ${std.recipient.organization}'s standard ${std.request_id}: the pinned task set and harness, the compiled gate policy, at most ${std.requirements.run?.attempts_per_task ?? "?"} attempt(s) and ${Math.round((std.requirements.run?.time_limit_seconds ?? 0) / 60)} minutes per task.`);
     if (receipts && chain) establishes.push(`The ${chain.count} receipts are the ones the manifest names, every one under that policy, every allowed call on the tool list, and the refusals counted match.`);
   }
-  not_established.push("Who holds the harness key or the gateway key: pin them through a channel you already trust.");
+  const demoKeys = isDemoRunSignerKey(m.signer.verification_key) || isDemoGatewayKey(m.gateway.verification_key);
+  if (demoKeys) not_established.push("Who holds the harness key or the gateway key: demonstration keys with public seeds signed this run; they prove the mechanism, not identity.");
+  else if (provenance?.verified && provenance.identity) establishes.push(`The gateway key ${m.gateway.key_id} and the harness key ${m.signer.key_id} are not the demonstration keys: the manifest naming them came out of the attested workflow run, whose code at that commit generates both inside the run and discards them with it.`);
+  else not_established.push("Who holds the harness key or the gateway key: they are not the demonstration keys; pin them through a channel you already trust, or supply the run's provenance.");
+  not_established.push(`Who holds the maintainer key that signed the standard${std ? ` (${std.recipient.organization}, ${std.recipient.key_id})` : ""}: pin its verification key through a channel you already trust.`);
   if (!att) not_established.push("That the sandbox enforced the declared network rule: this run carries no environment attestation, so egress and model route are the harness's declaration.");
   else if (provenance?.verified && provenance.identity) establishes.push(`Provenance verified here against the pinned Sigstore trust root: ${provenance.covered.map((r) => PROVENANCE_FILES[r]).join(", ")} came out of GitHub Actions workflow ${provenance.identity.workflow} at ${provenance.identity.repository}${provenance.identity.commit ? ` commit ${provenance.identity.commit}` : ""}, run ${provenance.identity.run ?? att.reference}; the signing certificate chains to Fulcio and the signature was logged in ${provenance.log?.base_url ?? "the transparency log"} at index ${provenance.log?.index ?? "?"} (${provenance.log?.integrated_time ?? "time unknown"}). What that workflow configured, the sandbox and the network rule, is in the repository at that commit.`);
   else if (prov && prov.bundles.length > 0) not_established.push(`That the run was made in the workflow it names (${att.reference}): the provenance supplied does not verify, or does not name these bytes.`);
@@ -6424,7 +6455,9 @@ export {
   evaluateCompiledPolicy,
   evaluateGatewayReceipts,
   fileDigest,
+  gatewayKeyFromPrivate,
   generateRecipientKey,
+  isDemoGatewayKey,
   isDemoRecipientKey,
   isDemoRunSignerKey,
   isDemoTrustKey,

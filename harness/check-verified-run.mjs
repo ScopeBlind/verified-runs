@@ -70,7 +70,11 @@ for (const dir of sampleDirs) {
   // 1. The standard.
   const sv = m.verifyProofRequest(standard, NOW);
   ok('the run standard verifies against the maintainer key it carries', sv.cryptographically_valid);
-  ok('the maintainer is the deterministic demo recipient, so the standard says demo', m.isDemoRecipientKey(standard.recipient.verification_key));
+  if (m.isDemoRecipientKey(standard.recipient.verification_key)) ok('the maintainer is the deterministic demo recipient, so the standard says demo', standard.recipient.organization.includes('demo'));
+  else {
+    const keyFile = [join(dirname(samples), 'maintainer-key.json'), join(samples, 'maintainer-key.json')].find((f) => existsSync(f));
+    ok('the standard is signed by the published maintainer key (maintainer-key.json beside the runs)', Boolean(keyFile) && JSON.parse(readFileSync(keyFile, 'utf8')).public_key === standard.recipient.verification_key && standard.recipient.organization === 'ScopeBlind');
+  }
   const compiled = m.compileStandard(standard, { tool: standard.enforcement.tool, action_model: standard.enforcement.action_model });
   ok('the compiler reproduces the policy and digest the standard carries', compiled.cedar.policy === standard.enforcement.policy && compiled.cedar.digest === standard.enforcement.policy_digest);
   ok('the committed policy file is the one whose digest the standard carries', m.policyDigest('cedar', [{ name: 'standard.cedar', content: readFileSync(join(dir, 'policy/standard.cedar'), 'utf8') }]) === standard.enforcement.policy_digest);
@@ -91,7 +95,8 @@ for (const dir of sampleDirs) {
   // 4. The manifest, alone and bound.
   const alone = m.verifyRunManifest(manifest, {}, NOW);
   ok('the manifest verifies on its own and says it is unbound', alone.cryptographically_valid && alone.binding === 'manifest_only');
-  ok('the harness signer is the deterministic demo key, so the manifest says demo', m.isDemoRunSignerKey(manifest.signer.verification_key));
+  if (m.isDemoRunSignerKey(manifest.signer.verification_key)) ok('the harness signer is the deterministic demo key, so the manifest says demo', /demo/.test(manifest.signer.name));
+  else ok('the harness key is ephemeral to this run: not the demonstration key, named by the standard, and (below) bound by the provenance', /ephemeral/.test(manifest.signer.name) && !m.isDemoGatewayKey(manifest.gateway.verification_key));
   // The calls log, the archived workspaces, and the second grading, when the run publishes them.
   const callsPath = join(dir, 'calls.jsonl');
   const calls = existsSync(callsPath) ? readFileSync(callsPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : null;
