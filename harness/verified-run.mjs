@@ -245,7 +245,13 @@ async function ensureAttestation(address, model) {
     const nonce = randomBytes(32).toString('hex');
     const r = await providerFetch(`/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ecdsa&nonce=${nonce}&signing_address=${encodeURIComponent(address)}`).catch((e) => ({ status: 0, text: String(e) }));
     if (r.status !== 200) { last = `${r.status} ${r.text.slice(0, 200)}`; await pause(1500); continue; }
-    const report = { ...JSON.parse(r.text), request_nonce: nonce, fetched_at: new Date().toISOString(), provider: 'near-ai-cloud' };
+    // The gateway answers with the gateway's own attestation and one entry per model node (model_attestations);
+    // the direct endpoint answers with one bare entry. Keep the entry for the key that signed our call.
+    const raw = JSON.parse(r.text);
+    const entries = Array.isArray(raw.model_attestations) ? raw.model_attestations : [raw];
+    const entry = entries.find((e) => e && typeof e === 'object' && String(e.signing_address ?? '').toLowerCase() === address);
+    if (!entry) { last = `the report binds ${entries.map((e) => e?.signing_address ?? '?').join(', ') || 'no key'}, wanted ${address}`; await pause(1000); continue; }
+    const report = { ...entry, request_nonce: nonce, fetched_at: new Date().toISOString(), provider: 'near-ai-cloud', ...(raw.gateway_attestation ? { gateway_attestation_digest: m.attestationReportDigest(raw.gateway_attestation) } : {}) };
     const v = m.verifyModelAttestation(report, { model, nonce });
     if (!v.valid) throw new Error(`the attestation report for ${address} does not verify: ${v.checks.filter((c) => !c.ok).map((c) => `${c.id}: ${c.detail}`).join('; ')}`);
     if (v.signing_address !== address) { last = `report binds ${v.signing_address}, wanted ${address}`; await pause(1000); continue; }
