@@ -45,8 +45,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         # Pasted secrets carry stray whitespace more often than not; a key is never whitespace.
         run: printf '%s' "$OPENAI_API_KEY" | tr -d '[:space:]' | codex login --with-api-key
-      - name: Install the sandbox Claude Code uses on Linux
-        if: ${{ inputs.agent == 'claude' }}
+      - name: Install the sandbox Claude Code and the attested loop use on Linux
+        if: ${{ inputs.agent == 'claude' || inputs.agent == 'attested' }}
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
       - name: Describe the Claude token (shape only, never the value)
         if: ${{ inputs.agent == 'claude' }}
