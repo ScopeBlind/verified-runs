@@ -1,0 +1,158 @@
+{
+  "name": "terminal-bench/original-tasks",
+  "source": "https://github.com/laude-institute/terminal-bench",
+  "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+  "sealed": false,
+  "rule": "Every file in the task directory except the reference solution, which is never fetched. Only WORKDIR and COPY lines of the Dockerfile are reproduced in the workspace; RUN lines are listed as not applied.",
+  "tasks": [
+    {
+      "id": "hello-world",
+      "files": [
+        {
+          "path": "Dockerfile",
+          "sha256": "a678ece7805bff5b99cc424448db6c099ed937a01fcc3b8a06acee3b3fa18cbb"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "sha256": "14fdb86e9a0bb3ba90871ddc8369a751dac7dda6886bc1a5c54ebe3825e99839"
+        },
+        {
+          "path": "run-tests.sh",
+          "sha256": "027ceb763af0c10faae0f55a0cdf8f0f95c5894379dec049dbaac5907da7ebb5"
+        },
+        {
+          "path": "task.yaml",
+          "sha256": "9ab51f37beba25bc4ac4ee52dc082df5c92e4be8b55fe2bbec63834896ae929c"
+        },
+        {
+          "path": "tests/test_outputs.py",
+          "sha256": "ae70869cb2179ea8d9c4834132c5d9675e371f4152094a3f199198e95958e165"
+        }
+      ],
+      "assets": [],
+      "dockerfile_run_lines_not_applied": []
+    },
+    {
+      "id": "countdown-game",
+      "files": [
+        {
+          "path": "Dockerfile",
+          "sha256": "291bcac60e9eccb7c10486ac60b3f7cc3250d398e6fa855438c9d27b14ffd48a"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "sha256": "3b3b5627e22229debb2fdf84f343a5f8117b0a96576dae8e158d482f8aa27e2b"
+        },
+        {
+          "path": "run-tests.sh",
+          "sha256": "e3fa70b2e05352d86f15b5f3676c8d4a3bf8d35320b9706f45f63c7d631bd04d"
+        },
+        {
+          "path": "task.yaml",
+          "sha256": "a736f5651d24e88ac31b2a728b1e54221ee9a08fae24df940f36c05491af0ebe"
+        },
+        {
+          "path": "tests/test_outputs.py",
+          "sha256": "672beb936351b6f0c41c0700c8fbb18c5a1f320522aab8a2a7ba3c22289d7ea4"
+        }
+      ],
+      "assets": [],
+      "dockerfile_run_lines_not_applied": []
+    },
+    {
+      "id": "bank-trans-filter",
+      "files": [
+        {
+          "path": "Dockerfile",
+          "sha256": "19a1ad5a89d4639683dfd1f21a0a08a34e146ae58655c4915a347260f8f2b62e"
+        },
+        {
+          "path": "data/bank_transactions.csv",
+          "sha256": "bbd95ce563a4f053817a61ca6f2b7f9623bdfa093b9fa39463f947f95efb2f9f"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "sha256": "41db89b6b0fe91d9abfa0cf987c4f260b8a580e9f03ebefa778d05cabf8bf17b"
+        },
+        {
+          "path": "run-tests.sh",
+          "sha256": "e3695069a15f8a594281f116b3fa74f793954fb80834b9e06013d9aca11a17c4"
+        },
+        {
+          "path": "task.yaml",
+          "sha256": "c5a29c7a01e891024da3fa7bac6f03678c23a1869ef956bf598875689f3b02ce"
+        },
+        {
+          "path": "tests/test_outputs.py",
+          "sha256": "c66afe78c0cae8edc745f18e0f7969b2b09eccc4a342ae3da51426cb6f791a1c"
+        }
+      ],
+      "assets": [
+        "data/bank_transactions.csv"
+      ],
+      "dockerfile_run_lines_not_applied": [
+        "RUN apt-get update && apt-get install -y      tmux curl asciinema      && rm -rf /var/lib/apt/lists/*",
+        "RUN mkdir /app/data"
+      ]
+    },
+    {
+      "id": "assign-seats",
+      "files": [
+        {
+          "path": "Dockerfile",
+          "sha256": "067fe7d0a58554d80d516cfb82766270a5a63960b28e40c31e05806427b9919d"
+        },
+        {
+          "path": "deps/ask_alice.pkl",
+          "sha256": "adf5b6620b5a123d7b874e9abd8cbaff153537836acaee80c1a617caed947d15"
+        },
+        {
+          "path": "deps/ask_bob.pkl",
+          "sha256": "857cf08a864c0073f184c8b37071472650c4f5c74eb14ad65551480628d51b29"
+        },
+        {
+          "path": "deps/ask_charlie.b64",
+          "sha256": "7381d51b715e019cdfdfc45f433586dda75eb45c51220b022c724ddab7dd1f4c"
+        },
+        {
+          "path": "deps/clue.txt",
+          "sha256": "9e84e2dd210ab28e5c3aa631f84e39fd6d1f722d99a19ee8d2c62442f59f3794"
+        },
+        {
+          "path": "deps/frankie_preferences.txt",
+          "sha256": "aa3e0aacc56c2741d5b06bd9e9d78a58e6afc664a38cc462f78e1a85e45d912e"
+        },
+        {
+          "path": "deps/random_fact.txt",
+          "sha256": "8a82975fd3f288f13e3e6a4152ef379d6e88b09dd5dcf72a763e84883a493b83"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "sha256": "3b3b5627e22229debb2fdf84f343a5f8117b0a96576dae8e158d482f8aa27e2b"
+        },
+        {
+          "path": "run-tests.sh",
+          "sha256": "e3fa70b2e05352d86f15b5f3676c8d4a3bf8d35320b9706f45f63c7d631bd04d"
+        },
+        {
+          "path": "task.yaml",
+          "sha256": "8a01b4b4b30e1799d3a5365386bb7f702a9566e1ceec57e63b27061e65b86ec4"
+        },
+        {
+          "path": "tests/test_outputs.py",
+          "sha256": "34dc3b7118dd4a27044279f4154a83e9a6197a746e6df2502913f7e1eb8dff02"
+        }
+      ],
+      "assets": [
+        "deps/ask_alice.pkl",
+        "deps/ask_bob.pkl",
+        "deps/ask_charlie.b64",
+        "deps/clue.txt",
+        "deps/frankie_preferences.txt",
+        "deps/random_fact.txt"
+      ],
+      "dockerfile_run_lines_not_applied": []
+    }
+  ],
+  "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c"
+}

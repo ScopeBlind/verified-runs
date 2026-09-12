@@ -1,0 +1,72 @@
+{
+  "type": "scopeblind.run_regrade.v1",
+  "version": 1,
+  "run_id": "run:00856fa42e6ae290",
+  "manifest_digest": "10db0609ed329a0a9a2c90aed3ff3dd45bf02720b746b9664c4211481964a8f1",
+  "grader": {
+    "name": "Legate regrader (demo)",
+    "key_id": "harness:1ba764519e311840",
+    "verification_key": "5b3b5acb5f282cec3e78533160fb5a3666ca7ee7f144add59d91e4991761c75c"
+  },
+  "environment": {
+    "sandbox": "GitHub Actions runner (linux), separate job",
+    "note": "Second grading in https://github.com/ScopeBlind/verified-runs/actions/runs/34678858933; the tests were obtained from the benchmark repository at the pinned commit and checked against the pin."
+  },
+  "results": [
+    {
+      "task_id": "hello-world",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:036fa4e3e3fbd16d4b3ef3456f3dcc456ef305c1e1fa673c484301559c2a52a7"
+      },
+      "workspace_digest": "sha256:213ef636d20e8bfa623b85f88e0e037e14ffae0dff2f2269da549a2bf5c710d1"
+    },
+    {
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 0,
+        "failed": 2,
+        "output_digest": "sha256:01fb40376b7c647163bcd67a267a54e890fbe07dd0f6b8ff0b4cfd56c5242414"
+      },
+      "workspace_digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2"
+    },
+    {
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 1,
+        "failed": 0,
+        "output_digest": "sha256:1cc378716bd0babd26a16e3936eb986604bc46a592dc8de9f55884fb37e0986e"
+      },
+      "workspace_digest": "sha256:bb533ad5960730aa22819c66ede0159465d329caad3c9d139951116971721bad"
+    },
+    {
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 0,
+        "failed": 2,
+        "output_digest": "sha256:d7e5ca0f843ce30a9c700a7918acdcb32707c952423a7fbe3e992f7edd4d13dc"
+      },
+      "workspace_digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2"
+    }
+  ],
+  "regraded_at": "2026-09-12T06:49:44.752Z",
+  "nonce": "05daec50940da53effb4d5981b162d2d",
+  "digest": "661e41b07105849cd9a53d4b668e773d390f9d1c33fa4f735b8f135d6fa13109",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "82c06ff811b14b54a164886e3ba7ab3fec792f2e1480d0e2b537b0ffa03d43fc50fcb947fd179e8082b2469b308f840f60bc858cdba178073d642bb8ff23f708"
+  }
+}
