@@ -15,6 +15,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -136,21 +137,31 @@ for (const dir of sampleDirs) {
     ok(`the committed test output for ${a.task_id} is the one the manifest digests`, m.fileDigest(readFileSync(join(dir, 'tests', `${a.task_id}.txt`), 'utf8')) === a.tests.output_digest);
   }
 
-  // 7. When the run was made in CI, the provenance bundles beside it name these exact bytes and that workflow.
-  //    (Consistency only: the Sigstore signature itself is checked with `gh attestation verify`.)
+  // 7. When the run was made in CI, the Sigstore bundles beside it are verified here, offline, against the pinned
+  //    trust root (certificate chain, workflow identity, signature, log entry, inclusion, SCT), and must name these
+  //    exact bytes and the run the manifest names. `gh attestation verify` is an independent path, not the only one.
   const provenanceDir = join(dir, 'provenance');
   if (existsSync(provenanceDir)) {
-    for (const f of ['manifest.json', 'receipts.jsonl', 'standard.json']) {
-      const bundle = JSON.parse(readFileSync(join(provenanceDir, `${f}.sigstore.jsonl`), 'utf8').trim().split('\n')[0]);
-      const statement = JSON.parse(Buffer.from(bundle.dsseEnvelope.payload, 'base64').toString('utf8'));
-      const digest = m.fileDigest(readFileSync(join(dir, f), 'utf8')).slice('sha256:'.length);
-      ok(`the provenance bundle for ${f} names the committed bytes`, statement.subject.some((s) => s.digest?.sha256 === digest) && statement.predicateType === 'https://slsa.dev/provenance/v1');
-      if (f === 'manifest.json') {
-        const att = manifest.environment.attestation;
-        ok('the manifest names the workflow run the provenance was made in', att && att.kind === 'github-actions-provenance' && String(statement.predicate?.runDetails?.metadata?.invocationId ?? '').startsWith(att.reference));
-        ok('the provenance names the verified-run workflow file', /verified-run\.yml/.test(String(statement.predicate?.buildDefinition?.externalParameters?.workflow?.path ?? '')));
-      }
-    }
+    const bundles = readdirSync(provenanceDir).filter((f) => f.endsWith('.sigstore.jsonl')).sort().flatMap((f) => readFileSync(join(provenanceDir, f), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)));
+    const bytes = { manifest: readFileSync(join(dir, 'manifest.json')), receipts: readFileSync(join(dir, 'receipts.jsonl')), standard: readFileSync(join(dir, 'standard.json')), ...(existsSync(regradePath) ? { regrade: readFileSync(regradePath) } : {}) };
+    const pv = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade, provenance: { bundles, bytes } }, NOW);
+    const provChecks = pv.checks.filter((c) => c.id.startsWith('provenance_'));
+    const failedProv = provChecks.filter((c) => !c.ok).map((c) => `${c.id}: ${c.detail}`);
+    ok(`the provenance bundles verify offline against the pinned Sigstore trust root (${provChecks.length} checks)${failedProv.length ? `: ${failedProv.join('; ')}` : ''}`, failedProv.length === 0 && pv.provenance?.verified === true);
+    ok('the provenance names the committed bytes of the manifest, the receipt chain, the standard, and the second grading', ['manifest', 'receipts', 'standard', ...(existsSync(regradePath) ? ['regrade'] : [])].every((r) => pv.provenance.covered.includes(r)));
+    const att = manifest.environment.attestation;
+    ok('the certificate names the workflow run the manifest names, and the verified-run workflow file', att?.kind === 'github-actions-provenance' && String(pv.provenance.identity?.run ?? '').startsWith(`${att.reference}/`) && /\/\.github\/workflows\/verified-run\.yml@/.test(String(pv.provenance.identity?.workflow ?? '')));
+    // The harness the manifest pins is the harness the repository held at the attested commit, where that commit is in reach (the public repository).
+    const commit = pv.provenance.identity?.commit ?? null;
+    const inHistory = commit !== null && spawnSync('git', ['-C', web, 'cat-file', '-e', `${commit}^{commit}`]).status === 0;
+    if (inHistory) {
+      const show = (p) => spawnSync('git', ['-C', web, 'show', `${commit}:${p}`]);
+      const h = show('harness/verified-run.mjs'), c = show('verify/legate-run.core.mjs');
+      if (h.status === 0 && c.status === 0) {
+        const pin = `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-verified-run', files: [{ name: 'verified-run.mjs', sha256: sha256Bytes(h.stdout) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(c.stdout) }] }))}`;
+        ok(`the harness the manifest pins is the harness the repository held at the attested commit ${commit.slice(0, 12)}`, pin === manifest.harness.digest);
+      } else console.log(`  · the attested commit ${commit.slice(0, 12)} holds no harness pair to compare`);
+    } else console.log(`  · the attested commit ${commit ? commit.slice(0, 12) : '(none)'} is not in this repository's history; the harness-at-commit check runs in the repository that made the run`);
   } else {
     ok('a run made outside CI carries no attestation and says so', manifest.environment.attestation === null);
   }

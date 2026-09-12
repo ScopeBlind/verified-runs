@@ -452,10 +452,10 @@ try {
       // attestation only when the workflow says one will be persisted (LEGATE_ATTEST): GitHub does not keep
       // attestations for user-owned private repositories, and a claim with nothing behind it would be a lie.
       attestation: process.env.LEGATE_ATTEST === 'github-actions-provenance' && ciRunUrl && workflowPath
-        ? { kind: 'github-actions-provenance', reference: ciRunUrl, digest: m.fileDigest(readFileSync(workflowPath, 'utf8')), ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}), ...(process.env.GITHUB_WORKFLOW_REF ? { workflow: process.env.GITHUB_WORKFLOW_REF } : {}) }
+        ? { kind: 'github-actions-provenance', reference: ciRunUrl, digest: m.fileDigest(readFileSync(workflowPath, 'utf8')) }
         : null,
       note: ciRunUrl
-        ? `Run in GitHub Actions (${ciRunUrl})${process.env.LEGATE_ATTEST === 'github-actions-provenance' ? '; the provenance attestations for manifest.json, receipts.jsonl, standard.json, and the second grading are on that run and kept beside it under provenance/, where the verifier consumes them' : '; no provenance attestation was persisted for this repository, so the sandbox and egress are the harness\'s declaration'}. Task paths were rebased from /app to a workspace and the tests were run with the same rebase.`
+        ? `Run in GitHub Actions (${ciRunUrl})${process.env.LEGATE_ATTEST === 'github-actions-provenance' ? '; the provenance attestation for manifest.json, receipts.jsonl, and standard.json is on that run' : '; no provenance attestation was persisted for this repository, so the sandbox and egress are the harness\'s declaration'}. Task paths were rebased from /app to a workspace and the tests were run with the same rebase.`
         : 'Demonstration run on a developer machine: the host\'s own sandbox stood in for the benchmark\'s Docker image; task paths were rebased from /app to a workspace and the tests were run with the same rebase.',
     },
     gateway: { key_id: m.GATEWAY_DEMO_KID, verification_key: m.GATEWAY_DEMO_PUBLIC_KEY, receipt_count: receipts.length, chain_head: receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null, log_digest: m.fileDigest(logText), calls_digest: m.fileDigest(callsText), calls_disclosed: discloseCalls },
@@ -506,7 +506,6 @@ try {
     '| manifest.json | The harness\'s signed account: pins, every attempt with its receipts and test verdict, the chain head. |',
     '| task-set.json | The pinned task set: file paths and hashes at the benchmark commit, never the files. Reference solutions were never fetched. Dockerfile RUN lines, if any, are listed as not applied. |',
     '| harness.json | The harness pin: the digest of the harness file and the run core it runs on, as the standard names it. |',
-    '| provenance/ | GitHub Actions (when the run was made there) | Sigstore bundles for manifest.json, receipts.jsonl, standard.json, and regrade.json: the workflow, repository, commit, and run that produced these bytes, verified offline against the pinned Sigstore trust root by the verifier, or independently with gh attestation verify. |',
     '| oracle.json | The real engine\'s verdict on every counterexample the compiler emitted. |',
     '| tests/ | The harness\'s own pytest output per task; its digest is in the manifest. |',
     `| calls.jsonl | ${discloseCalls ? 'The call behind every receipt, in order: tool and input, bound by the input digest each receipt carries. Open it to see what each shell call did.' : 'Held by the maintainer (sealed task set); its digest is in the manifest.'} |`,

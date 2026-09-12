@@ -37,13 +37,18 @@ const receipts = m.parseReceiptLog(readFileSync(join(dir, 'receipts.jsonl'), 'ut
 const baseRegrade = existsSync(join(dir, 'regrade.json')) ? read('regrade.json') : null;
 const baseCalls = existsSync(join(dir, 'calls.jsonl')) ? readFileSync(join(dir, 'calls.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const c = JSON.parse(l); return { tool: c.tool, input: c.input }; }) : null;
 const clone = (v) => JSON.parse(JSON.stringify(v));
+// The provenance beside the run (a run made in CI): the bundles and the exact bytes they name.
+const provenanceDir = join(dir, 'provenance');
+const baseBundles = existsSync(provenanceDir) ? readdirSync(provenanceDir).filter((f) => f.endsWith('.sigstore.jsonl')).sort().flatMap((f) => readFileSync(join(provenanceDir, f), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))) : null;
+const baseBytes = baseBundles ? { manifest: readFileSync(join(dir, 'manifest.json'), 'utf8'), receipts: readFileSync(join(dir, 'receipts.jsonl'), 'utf8'), standard: readFileSync(join(dir, 'standard.json'), 'utf8'), ...(existsSync(join(dir, 'regrade.json')) ? { regrade: readFileSync(join(dir, 'regrade.json'), 'utf8') } : {}) } : null;
+const baseProvenance = () => (baseBundles ? { bundles: clone(baseBundles), bytes: { ...baseBytes } } : undefined);
 
 let passed = 0;
 /** A mutation must leave the run unbound and fail the named check (or fail to verify at all). */
 function caught(name, mutate, expectCheck) {
-  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: baseRegrade ? clone(baseRegrade) : undefined, calls: baseCalls ? clone(baseCalls) : undefined };
+  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: baseRegrade ? clone(baseRegrade) : undefined, calls: baseCalls ? clone(baseCalls) : undefined, provenance: baseProvenance() };
   mutate(ctx);
-  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls }, NOW);
+  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls, provenance: ctx.provenance }, NOW);
   const failed = v.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
   const okCond = v.binding !== 'bound' && (expectCheck === null || failed.some((id) => expectCheck.test(id)));
   assert.ok(okCond, `${name}: verifier accepted it (binding=${v.binding}, failed=[${failed.join(', ')}])`);
@@ -59,7 +64,7 @@ const resign = (mf) => {
 
 console.log(`adversarial suite against ${dir}:`);
 // The verifier's baseline: the committed run binds (with its second grading and calls when it has them; a run made before those existed may leave only the verdict-evidence check open).
-const baseline = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined }, NOW);
+const baseline = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined, provenance: baseProvenance() }, NOW);
 const baselineOpen = baseline.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
 assert.ok(baseline.binding === 'bound' || baselineOpen.every((id) => id === 'verdict_evidence'), `the committed run does not bind; nothing to test against (${baselineOpen.join(', ')})`);
 
@@ -128,4 +133,16 @@ if (existsSync(join(dir, 'regrade.json'))) {
   caughtRegrade('a regrade for a different manifest', (c) => { c.regrade.manifest_digest = 'e'.repeat(64); }, /regrade/);
 }
 caught('a call hidden by narrowing an attempt\'s receipt range, counts adjusted, re-signed', (c) => { const a = c.manifest.attempts[c.manifest.attempts.length - 1]; a.receipts.to -= 1; a.calls -= 1; c.manifest.summary.calls -= 1; c.manifest = resign(c.manifest); }, /attempts_cover_chain/);
+
+// Provenance: a run made in CI carries Sigstore bundles; each is consumed by the verifier, so each can be attacked.
+if (baseBundles) {
+  const flipB64 = (s, at) => { const b = Buffer.from(s, 'base64'); b[at] ^= 1; return b.toString('base64'); };
+  caught('the provenance bundle\'s signature altered', (c) => { c.provenance.bundles[0].dsseEnvelope.signatures[0].sig = flipB64(c.provenance.bundles[0].dsseEnvelope.signatures[0].sig, 7); }, /provenance_1_signature/);
+  caught('the provenance statement rewritten to name other bytes (payload re-encoded)', (c) => { const st = JSON.parse(Buffer.from(c.provenance.bundles[0].dsseEnvelope.payload, 'base64').toString('utf8')); st.subject[0].digest.sha256 = '0'.repeat(64); c.provenance.bundles[0].dsseEnvelope.payload = Buffer.from(JSON.stringify(st)).toString('base64'); }, /provenance_1_signature|provenance_manifest/);
+  caught('the manifest re-signed to name a different workflow run', (c) => { c.manifest.environment.attestation.reference = c.manifest.environment.attestation.reference.replace(/\/runs\/\d+$/, '/runs/1'); c.manifest = resign(c.manifest); }, /provenance_1_identity/);
+  caught('the log entry\'s integration time moved', (c) => { const e = c.provenance.bundles[0].verificationMaterial.tlogEntries[0]; e.integratedTime = String(Number(e.integratedTime) + 60); }, /provenance_1_log/);
+  caught('an inclusion-proof hash altered', (c) => { const pr = c.provenance.bundles[0].verificationMaterial.tlogEntries[0].inclusionProof; pr.hashes[0] = flipB64(pr.hashes[0], 0); }, /provenance_1_inclusion/);
+  caught('the signing certificate replaced by another workflow certificate', (c) => { const cert = Buffer.from(c.provenance.bundles[0].verificationMaterial.certificate.rawBytes, 'base64'); cert[cert.length - 24] ^= 1; c.provenance.bundles[0].verificationMaterial.certificate.rawBytes = cert.toString('base64'); }, /provenance_1_certificate|provenance_1_signature/);
+  caught('the manifest file edited after attestation (a byte appended)', (c) => { c.provenance.bytes.manifest = `${c.provenance.bytes.manifest}\n`; }, /provenance_manifest/);
+}
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);
