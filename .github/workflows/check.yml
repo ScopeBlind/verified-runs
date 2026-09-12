@@ -11,5 +11,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pytest==8.4.1
       - run: npm ci
       - run: npm run check
+      - name: Re-grade every committed run whose workspaces are published
+        env:
+          SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for d in runs/*/; do
+            if ls "$d"/workspace/*.json >/dev/null 2>&1 && grep -q '"content"' "$d"/workspace/*.json; then
+              sealed=""; if [ "$(node -e "console.log(require('./$d/task-set.json').sealed === true)")" = "true" ]; then sealed="--sealed task-sets/terminal-bench-4.sealed.json"; fi
+              echo "== $d"; node harness/regrade.mjs --run "$d" $sealed --out /tmp/regrade-check.json --sign || exit 1
+            fi
+          done

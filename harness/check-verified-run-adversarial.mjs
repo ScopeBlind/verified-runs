@@ -28,14 +28,17 @@ const NOW = new Date('2026-09-12T00:00:00Z');
 const standard = read('standard.json');
 const manifest = read('manifest.json');
 const receipts = m.parseReceiptLog(readFileSync(join(dir, 'receipts.jsonl'), 'utf8')).receipts;
+// The second grading and the calls log, when the run publishes them: part of the baseline every mutation is measured against.
+const baseRegrade = existsSync(join(dir, 'regrade.json')) ? read('regrade.json') : null;
+const baseCalls = existsSync(join(dir, 'calls.jsonl')) ? readFileSync(join(dir, 'calls.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const c = JSON.parse(l); return { tool: c.tool, input: c.input }; }) : null;
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 let passed = 0;
 /** A mutation must leave the run unbound and fail the named check (or fail to verify at all). */
 function caught(name, mutate, expectCheck) {
-  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest) };
+  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: baseRegrade ? clone(baseRegrade) : undefined, calls: baseCalls ? clone(baseCalls) : undefined };
   mutate(ctx);
-  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts }, NOW);
+  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls }, NOW);
   const failed = v.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
   const okCond = v.binding !== 'bound' && (expectCheck === null || failed.some((id) => expectCheck.test(id)));
   assert.ok(okCond, `${name}: verifier accepted it (binding=${v.binding}, failed=[${failed.join(', ')}])`);
@@ -50,8 +53,10 @@ const resign = (mf) => {
 };
 
 console.log(`adversarial suite against ${dir}:`);
-// The verifier's baseline: the committed run binds.
-assert.equal(m.verifyRunManifest(manifest, { standard, receipts }, NOW).binding, 'bound', 'the committed run does not bind; nothing to test against');
+// The verifier's baseline: the committed run binds (with its second grading and calls when it has them; a run made before those existed may leave only the verdict-evidence check open).
+const baseline = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined }, NOW);
+const baselineOpen = baseline.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
+assert.ok(baseline.binding === 'bound' || baselineOpen.every((id) => id === 'verdict_evidence'), `the committed run does not bind; nothing to test against (${baselineOpen.join(', ')})`);
 
 caught('score raised in the manifest', (c) => { c.manifest.summary.passed += 1; }, /digest/);
 caught('score raised and the manifest re-signed with the demo harness key, but the attempts still say otherwise', (c) => { c.manifest.summary.passed += 1; c.manifest = resign(c.manifest); }, /summary/);
@@ -87,5 +92,35 @@ caught('an allowed call to an off-list tool, forged with the demo gateway key an
   c.receipts[0].payload.tool_name = 'WebFetch';
 }, /chain|tools/);
 caught('egress declared beyond the allowlist and re-signed', (c) => { c.manifest.environment.egress = ['evil.example']; c.manifest = resign(c.manifest); }, /egress/);
+caught('the first receipt removed: the next one points at a predecessor that is not there', (c) => { c.receipts.shift(); }, /chain/);
+if (existsSync(join(dir, 'calls.jsonl'))) {
+  const callsLog = readFileSync(join(dir, 'calls.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const callsCtx = (log) => log.map((x) => ({ tool: x.tool, input: x.input }));
+  const withCalls = (mutate) => (c) => { c.calls = callsCtx(callsLog); mutate(c); };
+  const caughtWith = (name, mutate, expect) => {
+    const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), calls: callsCtx(callsLog), regrade: baseRegrade ? clone(baseRegrade) : undefined };
+    mutate(ctx);
+    const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, calls: ctx.calls, regrade: ctx.regrade }, NOW);
+    const failed = v.checks.filter((x) => !x.ok && !x.informational).map((x) => x.id);
+    assert.ok(v.binding !== 'bound' && failed.some((id) => expect.test(id)), `${name}: verifier accepted it (failed=[${failed.join(', ')}])`);
+    passed++; console.log(`  ✓ caught: ${name} (${failed.slice(0, 3).join(', ')})`);
+  };
+  caughtWith('a shell command in the calls log rewritten (ls in place of what ran)', (c) => { const i = c.calls.findIndex((x) => x.tool === 'Bash'); if (i >= 0) c.calls[i] = { tool: 'Bash', input: { command: 'ls -la' } }; else c.calls[0] = { tool: c.calls[0].tool, input: {} }; }, /calls_bind/);
+  caughtWith('a call dropped from the calls log', (c) => { c.calls.pop(); }, /calls_bind/);
+}
+if (existsSync(join(dir, 'regrade.json'))) {
+  const regrade = JSON.parse(readFileSync(join(dir, 'regrade.json'), 'utf8'));
+  const caughtRegrade = (name, mutate, expect) => {
+    const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: clone(regrade), calls: baseCalls ? clone(baseCalls) : undefined };
+    mutate(ctx);
+    const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls }, NOW);
+    const failed = v.checks.filter((x) => !x.ok && !x.informational).map((x) => x.id);
+    assert.ok(v.binding !== 'bound' && failed.some((id) => expect.test(id)), `${name}: verifier accepted it (failed=[${failed.join(', ')}])`);
+    passed++; console.log(`  ✓ caught: ${name} (${failed.slice(0, 3).join(', ')})`);
+  };
+  caughtRegrade('a regrade verdict flipped without re-signing', (c) => { c.regrade.results[0].verdict = c.regrade.results[0].verdict === 'pass' ? 'fail' : 'pass'; }, /regrade/);
+  caughtRegrade('a regrade signed by the harness key itself, not a second party', (c) => { const { type, version, run_id, manifest_digest, grader, environment, results, regraded_at, nonce } = c.regrade; c.regrade = m.createRunRegrade({ manifest: c.manifest, results, environment }, signer, new Date(regraded_at), { nonce }); }, /regrade/);
+  caughtRegrade('a regrade for a different manifest', (c) => { c.regrade.manifest_digest = 'e'.repeat(64); }, /regrade/);
+}
 caught('a call hidden by narrowing an attempt\'s receipt range, counts adjusted, re-signed', (c) => { const a = c.manifest.attempts[c.manifest.attempts.length - 1]; a.receipts.to -= 1; a.calls -= 1; c.manifest.summary.calls -= 1; c.manifest = resign(c.manifest); }, /attempts_cover_chain/);
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);

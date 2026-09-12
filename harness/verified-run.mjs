@@ -43,7 +43,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createDecipheriv } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -71,6 +71,11 @@ const outDir = resolve(flag('--out', resolve(harnessDir, '../../samples/verified
 const revision = flag('--revision', 'd28711d0da2675d0bb1d56de45ae5df6082438a3');
 const timeLimit = Number(flag('--time-limit', '900'));
 const keepWorkspace = args.includes('--keep');
+// What is published beside the run. The calls log (each tool call's input) and the archived workspaces (what the agent
+// left) are disclosed by default for a public task set and held for the maintainer on a sealed one; the manifest
+// carries their digests either way, so a held file is still bound.
+const discloseCalls = args.includes('--disclose-calls') ? true : args.includes('--no-disclose-calls') ? false : !sealedPath;
+const discloseWorkspace = args.includes('--disclose-workspace') ? true : args.includes('--no-disclose-workspace') ? false : !sealedPath;
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const sha256Bytes = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -197,7 +202,7 @@ if (!agent) { console.error(`unknown agent ${agentName}; one of ${Object.keys(AG
 // same predecessor and the chain forks, which a verifier rightly calls broken.
 const GATE_HOOK = `#!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 const [cli, format, cedar, receipts, key] = process.argv.slice(2);
 const lock = receipts + '/.hook-lock'; // distinct from the lock protect-mcp 0.13.3 takes inside sign, which would otherwise wait on this one
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -217,11 +222,17 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => { input += c; });
 process.stdin.on('end', () => {
   acquire();
-  let r;
-  try { r = spawnSync(process.execPath, [cli, 'sign', '--format', format, '--cedar', cedar, '--action-model', 'mcp', '--receipts', receipts, '--key', key], { input, encoding: 'utf8' }); }
-  finally { rmSync(lock, { recursive: true, force: true }); }
-  let out = null;
-  try { out = JSON.parse(r.stdout.trim().split('\\n').pop()); } catch { /* fall through */ }
+  let r; let out = null;
+  try {
+    r = spawnSync(process.execPath, [cli, 'sign', '--format', format, '--cedar', cedar, '--action-model', 'mcp', '--receipts', receipts, '--key', key], { input, encoding: 'utf8' });
+    try { out = JSON.parse(r.stdout.trim().split('\\n').pop()); } catch { /* fall through */ }
+    // The call itself, one line per receipt in the same order and under the same lock, so a reader can open the input digest each receipt carries.
+    if (out && out.signed) {
+      let j = null; try { j = JSON.parse(input); } catch { /* no payload */ }
+      const tool = j ? (j.tool_name ?? j.toolName ?? '') : ''; const toolInput = j ? (j.tool_input ?? j.toolInput ?? {}) : {};
+      appendFileSync(receipts + '/calls.jsonl', JSON.stringify({ tool, input: toolInput, decision: out.decision, request_id: out.request_id }) + '\\n');
+    }
+  } finally { rmSync(lock, { recursive: true, force: true }); }
   if (!out || !out.signed) { process.stderr.write('Legate gate: no signed receipt could be written; refusing the call (fail closed).\\n'); process.exit(2); }
   if (out.decision !== 'allow') {
     let tool = '?'; try { const j = JSON.parse(input); tool = j.tool_name ?? j.toolName ?? '?'; } catch { /* ignore */ }
@@ -303,8 +314,10 @@ try {
   const harnessFiles = [{ name: 'verified-run.mjs', sha256: sha256Bytes(readFileSync(here)) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(readFileSync(corePath)) }];
   const harnessDigest = `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-verified-run', files: harnessFiles }))}`;
   const protectVersion = spawnSync('node', [cli, 'version'], { encoding: 'utf8' }).stdout.trim();
-  // The harness key signs the manifest; the standard names it as an accepted readback source, so a manifest under any other key does not bind.
+  // The harness key signs the manifest and the grader key signs a second grading; the standard names both as accepted
+  // readback sources, so a manifest or a regrade under any other key does not bind, and a regrade under the harness key is not a second party.
   const signer = m.runSignerFromSeed('legate-verified-run', 'Legate verified-run harness (demo)');
+  const grader = m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
 
   // 3. The standard, signed by the maintainer key, compiled to the policy the gate enforces.
   const NOW = new Date('2026-09-11T00:00:00.000Z');
@@ -321,10 +334,10 @@ try {
       coverage: 'governed_route', effect_evidence: 'independently_reconciled', anchoring: 'self_attested', partial_settlement_permitted: false,
       run: { allowed_tools: agent.allowed_tools, egress_allowlist: agent.egress, attempts_per_task: 1, dataset: { name: datasetName, revision: datasetRevision, digest: datasetDigest }, harness: { name: 'legate-verified-run', digest: harnessDigest }, time_limit_seconds: timeLimit, model_route: agent.model_route },
     },
-    trust: { accepted_gate_keys: [m.GATEWAY_DEMO_PUBLIC_KEY], accepted_approver_keys: [], accepted_readback_sources: [signer.verification_key], accepted_anchor_witnesses: [] },
+    trust: { accepted_gate_keys: [m.GATEWAY_DEMO_PUBLIC_KEY], accepted_approver_keys: [], accepted_readback_sources: [signer.verification_key, grader.verification_key], accepted_anchor_witnesses: [] },
     disclosure: { required_fields: ['tool calls', 'verdicts', 'chain head'], inspection: 'on_request' },
-    limitations_permitted: ['The agent\'s own sandbox stands in for the benchmark\'s Docker image; task paths are rebased from /app to the workspace and the tests are run with the same rebase', 'The gate clock is accepted as the dispatch time', 'No environment attestation is required for a demonstration run', 'Demonstration keys sign the standard, the receipts, and the manifest; they prove the mechanism, not identity'],
-    rejection_criteria: ['Any tool call not on the allowed list', 'Any gap in the receipt chain', 'More than one attempt per task', 'Any self-reported pass'],
+    limitations_permitted: ['The agent\'s own sandbox stands in for the benchmark\'s Docker image; task paths are rebased from /app to the workspace and the tests are run with the same rebase', 'The gate clock is accepted as the dispatch time', 'No environment attestation is required for a demonstration run', 'Demonstration keys sign the standard, the receipts, the manifest, and the regrade; they prove the mechanism, not identity', 'The second grading may run in the same continuous-integration account as the first, under a distinct key and job; a grading by a third party is stronger and the archived workspace makes it possible'],
+    rejection_criteria: ['Any tool call not on the allowed list that the gate allowed', 'Any gap in the receipt chain', 'More than one attempt per task', 'Any pass the agent reports that the harness\'s tests do not reproduce'],
     hold_criteria: ['A harness other than the pinned one', 'A run whose environment attestation is missing'],
     deadline: { respond_by: FAR, evidence_max_age_seconds: 30 * 24 * 3600 },
     consequence: { if_met: 'Listed as a verified run: the score stands on the receipts and the manifest, not on the submitter\'s word.', if_not_met: 'Listed as unverified, or not listed. No score is taken from this submission.', not_a_promise: true },
@@ -357,15 +370,17 @@ try {
   const receiptCount = () => (existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean).length : 0);
 
   // 5. Each task, one attempt, in its own workspace, under the hook.
-  const attempts = []; const testOutputs = {};
+  const attempts = []; const testOutputs = {}; const workspaces = {};
   for (const task of tasks) {
     const ws = mkdtempSync(join(tmpdir(), `legate-task-${task.id}-`));
     mkdirSync(join(ws, 'app'));
-    // The task's own files, placed where its Dockerfile would put them.
+    // The task's own files, placed where its Dockerfile would put them; remembered so the archive holds only what the agent added or changed.
+    const placed = new Map();
     const place = (abs, buf) => {
       if (!abs.startsWith('/app/')) { console.log(`    not placed (outside /app): ${abs}`); return; }
       const target = join(ws, 'app', abs.slice('/app/'.length));
       mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, buf);
+      placed.set(abs.slice('/app/'.length), sha256Bytes(buf));
     };
     for (const c of task.setup.copies) {
       const under = Object.keys(task.files).filter((p) => p === c.src || p.startsWith(`${c.src}/`));
@@ -404,7 +419,14 @@ try {
     const runner = `pytest ${(spawnSync('python3', ['-m', 'pytest', '--version'], { encoding: 'utf8' }).stdout.match(/[\d.]+/) ?? ['?'])[0]}, run by the harness`;
     const chain = readFileSync(logPath, 'utf8').split('\n').filter(Boolean).slice(from, to).map((l) => JSON.parse(l));
     const refused = chain.filter((r) => (r.payload?.decision ?? r.decision) === 'deny').length;
-    attempts.push({ task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, agent: { exit_code: run.exit_code, timed_out: run.timed_out } });
+    // What the agent left in the task directory: every file that is not a placed task file with its original bytes.
+    const wsFiles = [];
+    const walk = (dir, rel) => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); const r = rel ? `${rel}/${e.name}` : e.name; if (e.isDirectory()) walk(p, r); else if (e.isFile()) { const buf = readFileSync(p); const sha = sha256Bytes(buf); if (placed.get(r) === sha) continue; wsFiles.push({ path: r, sha256: sha, size: buf.length, ...(discloseWorkspace && buf.length <= 262_144 ? { content: buf.toString('base64') } : {}) }); } } };
+    walk(join(ws, 'app'), '');
+    wsFiles.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const wsDigest = m.workspaceDigest(wsFiles);
+    workspaces[task.id] = { type: 'legate.workspace_archive.v1', task_id: task.id, attempt: 1, digest: wsDigest, files: wsFiles };
+    attempts.push({ task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, agent: { exit_code: run.exit_code, timed_out: run.timed_out }, workspace: { digest: wsDigest, file_count: wsFiles.length, disclosed: discloseWorkspace } });
     testOutputs[task.id] = output;
     console.log(`    ${verdict}: ${passed} passed, ${failed} failed; ${to - from} governed calls, ${refused} refused; ${Math.round((ended - started) / 1000)} s`);
     if (!keepWorkspace) rmSync(ws, { recursive: true, force: true }); else console.log(`    workspace kept at ${ws}`);
@@ -414,6 +436,10 @@ try {
   const ciRunUrl = process.env.GITHUB_ACTIONS && process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null;
   const logText = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
   const receipts = logText.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const callsPath = join(receiptsDir, 'calls.jsonl');
+  const callsText = existsSync(callsPath) ? readFileSync(callsPath, 'utf8') : '';
+  const callsLog = callsText.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  if (callsLog.length !== receipts.length) throw new Error(`the calls log has ${callsLog.length} entries for ${receipts.length} receipts; the hook did not record every call`);
   if (!receipts.every((r) => r.signature)) throw new Error('an unsigned line is in the receipt log; the gateway key was not used');
   const manifestDraft = {
     standard: { request_id: standard.request_id, digest: standard.digest, recipient_key: standard.recipient.verification_key, policy_digest: compiled.cedar.digest },
@@ -432,13 +458,15 @@ try {
         ? `Run in GitHub Actions (${ciRunUrl})${process.env.LEGATE_ATTEST === 'github-actions-provenance' ? '; the provenance attestation for manifest.json, receipts.jsonl, and standard.json is on that run' : '; no provenance attestation was persisted for this repository, so the sandbox and egress are the harness\'s declaration'}. Task paths were rebased from /app to a workspace and the tests were run with the same rebase.`
         : 'Demonstration run on a developer machine: the host\'s own sandbox stood in for the benchmark\'s Docker image; task paths were rebased from /app to a workspace and the tests were run with the same rebase.',
     },
-    gateway: { key_id: m.GATEWAY_DEMO_KID, verification_key: m.GATEWAY_DEMO_PUBLIC_KEY, receipt_count: receipts.length, chain_head: receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null, log_digest: m.fileDigest(logText) },
+    gateway: { key_id: m.GATEWAY_DEMO_KID, verification_key: m.GATEWAY_DEMO_PUBLIC_KEY, receipt_count: receipts.length, chain_head: receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null, log_digest: m.fileDigest(logText), calls_digest: m.fileDigest(callsText), calls_disclosed: discloseCalls },
     attempts,
     summary: { tasks: new Set(attempts.map((a) => a.task_id)).size, passed: attempts.filter((a) => a.verdict === 'pass').length, failed: attempts.filter((a) => a.verdict === 'fail').length, errored: attempts.filter((a) => a.verdict === 'error').length, calls: attempts.reduce((n, a) => n + a.calls, 0), refused: attempts.reduce((n, a) => n + a.refused, 0) },
   };
   const manifest = m.createRunManifest(manifestDraft, signer, new Date());
-  const verification = m.verifyRunManifest(manifest, { standard, receipts });
-  if (verification.binding !== 'bound') {
+  const verification = m.verifyRunManifest(manifest, { standard, receipts, calls: callsLog.map((c) => ({ tool: c.tool, input: c.input })), workspaces: Object.fromEntries(Object.entries(workspaces).map(([id, w]) => [id, w.files])) });
+  // Without a second grading the standard's verdict-evidence check is open by design; everything else must bind.
+  const open = verification.checks.filter((c) => !c.ok && !c.informational && c.id !== 'verdict_evidence');
+  if (open.length) {
     const chain = m.verifyActaChain(receipts, { publicKeyHex: m.GATEWAY_DEMO_PUBLIC_KEY });
     const bad = chain.receipts.filter((r) => r.signature !== 'valid' || !['genesis', 'linked', 'ok'].includes(String(r.link))).map((r) => `#${r.index} ${r.tool ?? '?'} signature=${r.signature} link=${String(r.link)}`);
     throw new Error(`the manifest does not bind: ${verification.checks.filter((c) => !c.ok).map((c) => `${c.label}: ${c.detail}`).join('; ')}${bad.length ? `\n  receipts at fault: ${bad.join('; ')}` : ''}`);
@@ -448,6 +476,12 @@ try {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(join(outDir, 'policy'), { recursive: true }); mkdirSync(join(outDir, 'tests'));
   const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
+  const heldDir = `${outDir}-held`;
+  if (!discloseCalls || !discloseWorkspace) { rmSync(heldDir, { recursive: true, force: true }); mkdirSync(join(heldDir, 'workspace'), { recursive: true }); }
+  writeFileSync(join(discloseCalls ? outDir : heldDir, 'calls.jsonl'), callsText);
+  mkdirSync(join(outDir, 'workspace'));
+  for (const [id, w] of Object.entries(workspaces)) writeFileSync(join(discloseWorkspace ? outDir : heldDir, 'workspace', `${id}.json`), json(discloseWorkspace ? w : { ...w, files: w.files.map(({ content, ...rest }) => rest) }));
+  if (!discloseWorkspace) for (const [id, w] of Object.entries(workspaces)) writeFileSync(join(outDir, 'workspace', `${id}.json`), json({ ...w, files: w.files.map(({ content, ...rest }) => rest), held: true }));
   writeFileSync(join(outDir, 'standard.json'), json(standard));
   writeFileSync(join(outDir, 'policy', compiled.cedar.file_name), compiled.cedar.policy);
   writeFileSync(join(outDir, 'receipts.jsonl'), logText);
@@ -474,6 +508,9 @@ try {
     '| harness.json | The harness pin: the digest of the harness file and the run core it runs on, as the standard names it. |',
     '| oracle.json | The real engine\'s verdict on every counterexample the compiler emitted. |',
     '| tests/ | The harness\'s own pytest output per task; its digest is in the manifest. |',
+    `| calls.jsonl | ${discloseCalls ? 'The call behind every receipt, in order: tool and input, bound by the input digest each receipt carries. Open it to see what each shell call did.' : 'Held by the maintainer (sealed task set); its digest is in the manifest.'} |`,
+    `| workspace/ | ${discloseWorkspace ? 'What the agent left in each task directory, pinned by digest in the manifest, so anyone can re-run the pinned tests on it.' : 'Paths and digests only; the contents are held by the maintainer (sealed task set).'} |`,
+    '| regrade.json | A second grading, when made: the pinned tests re-run on the archived workspace, signed under a distinct grader key the standard accepts. `regrade.mjs` makes one. |',
     '',
     '## Result',
     '',
@@ -486,6 +523,8 @@ try {
     ...verification.not_established.map((n) => `- ${n}`),
     '',
     'Verify offline: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl`, or drop the three files on legate.scopeblind.com/verify.',
+    '',
+    'Removing a receipt from the front leaves a dangling link, which the verifier reports; removing one from the end changes the head and the count the manifest pins; a chain re-signed from scratch needs the keys, which is why the standard names them and why demonstration keys prove the mechanism only. A receipt records the call the gate saw, not what the call did: open calls.jsonl for that, and the workspace archive for what was left behind. The verdicts are the harness\'s own test run until a second grading reconciles them.',
     '',
   ].join('\n'));
   console.log(`\n${verification.title}\n${m.runManifestReadback(manifest)}\n\nwritten to ${outDir}`);

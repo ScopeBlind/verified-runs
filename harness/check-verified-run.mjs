@@ -31,6 +31,7 @@ const sha256Bytes = (buf) => createHash('sha256').update(buf).digest('hex');
 
 let passed = 0;
 const ok = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  ✓ ${name}`); };
+const require_sha = (f) => createHash('sha256').update(Buffer.from(f.content, 'base64')).digest('hex') === f.sha256;
 
 // 0. The run core on disk is what the source builds, byte for byte, so a vendored copy can be trusted by its digest.
 //    (Only where the source is present; the public repository vendors the bundle and records its digest instead.)
@@ -79,8 +80,30 @@ for (const dir of sampleDirs) {
   const alone = m.verifyRunManifest(manifest, {}, NOW);
   ok('the manifest verifies on its own and says it is unbound', alone.cryptographically_valid && alone.binding === 'manifest_only');
   ok('the harness signer is the deterministic demo key, so the manifest says demo', m.isDemoRunSignerKey(manifest.signer.verification_key));
-  const bound = m.verifyRunManifest(manifest, { standard, receipts }, NOW);
-  ok('with the standard and the receipts the manifest is bound', bound.binding === 'bound' && bound.checks.every((c) => c.ok || c.informational));
+  // The calls log, the archived workspaces, and the second grading, when the run publishes them.
+  const callsPath = join(dir, 'calls.jsonl');
+  const calls = existsSync(callsPath) ? readFileSync(callsPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : null;
+  if (calls) {
+    ok('the calls log is the one the manifest digests, byte for byte', manifest.gateway.calls_digest === m.fileDigest(readFileSync(callsPath, 'utf8')) && manifest.gateway.calls_disclosed === true);
+    ok('every receipt opens to the call the log records (tool and input digest)', m.verifyRunManifest(manifest, { standard, receipts, calls: calls.map((c) => ({ tool: c.tool, input: c.input })) }, NOW).checks.find((c) => c.id === 'calls_bind')?.ok === true);
+  } else if (manifest.gateway.calls_digest) {
+    ok('the calls log is held, and the manifest says so', manifest.gateway.calls_disclosed === false);
+  }
+  const workspaces = {};
+  for (const a of manifest.attempts) {
+    const wp = join(dir, 'workspace', `${a.task_id}.json`);
+    if (!a.workspace || !existsSync(wp)) continue;
+    const archive = JSON.parse(readFileSync(wp, 'utf8'));
+    ok(`the workspace archive for ${a.task_id} is the one the manifest pins (${a.workspace.file_count} file${a.workspace.file_count === 1 ? '' : 's'})`, m.workspaceDigest(archive.files) === a.workspace.digest && archive.files.length === a.workspace.file_count);
+    if (a.workspace.disclosed) ok(`every archived file for ${a.task_id} matches its own digest`, archive.files.every((f) => typeof f.content === 'string' && require_sha(f)));
+    workspaces[a.task_id] = archive.files;
+  }
+  const regradePath = join(dir, 'regrade.json');
+  const regrade = existsSync(regradePath) ? JSON.parse(readFileSync(regradePath, 'utf8')) : null;
+  if (regrade) ok('the second grading verifies, is by a distinct key the standard accepts, and agrees with every verdict', m.verifyRunManifest(manifest, { standard, receipts, regrade }, NOW).checks.find((c) => c.id === 'regrade')?.ok === true);
+  const bound = m.verifyRunManifest(manifest, { standard, receipts, calls: calls ? calls.map((c) => ({ tool: c.tool, input: c.input })) : undefined, workspaces: Object.keys(workspaces).length ? workspaces : undefined, regrade }, NOW);
+  const openChecks = bound.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
+  ok(`with the standard, the receipts${calls ? ', the calls' : ''}${Object.keys(workspaces).length ? ', the workspaces' : ''}${regrade ? ', and the regrade' : ''} the manifest is bound${regrade ? '' : ' except for the verdict evidence the standard asks a second grading for'}`, regrade ? bound.binding === 'bound' : openChecks.every((id) => id === 'verdict_evidence'));
   ok('the manifest names the chain head and count that the receipt log has', manifest.gateway.receipt_count === receipts.length && manifest.gateway.chain_head === m.chainLink(receipts[receipts.length - 1]));
   ok('the manifest\'s log digest is the digest of the committed JSONL bytes', manifest.gateway.log_digest === m.fileDigest(readFileSync(join(dir, 'receipts.jsonl'), 'utf8')));
   ok('at least one task passed and every attempt has receipts', manifest.summary.passed >= 1 && manifest.attempts.every((a) => a.calls >= 1));

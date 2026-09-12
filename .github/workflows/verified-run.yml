@@ -68,7 +68,10 @@ jobs:
           LEGATE_ATTEST: github-actions-provenance
         run: |
           export CLAUDE_CODE_OAUTH_TOKEN="$(printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN_RAW" | tr -d '[:space:]')"
-          node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run"
+          # A run made here is public: the calls log and the workspace archives are published with it, so the
+          # second grading below (and anyone else) can rebuild the workspaces. Hold them by running the harness
+          # on your own machine with --no-disclose-calls --no-disclose-workspace.
+          node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run" --disclose-calls --disclose-workspace
       - name: Check the run as a reader would
         run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl"
       - name: Attest provenance of the manifest, the receipt chain, and the standard
@@ -90,4 +93,49 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: verified-run
+          path: ${{ runner.temp }}/verified-run
+
+  # A second grading in a separate job: the archived workspaces are rebuilt, the pinned tests are obtained
+  # again and checked against the pin, pytest runs again, and the verdicts are signed under the grader key.
+  regrade:
+    needs: run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pytest==8.4.1
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-run
+          path: ${{ runner.temp }}/verified-run
+      - name: Second grading
+        env:
+          SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tasks='${{ inputs.tasks }}'
+          case "$tasks" in
+            sealed:*) node harness/regrade.mjs --run "$RUNNER_TEMP/verified-run" --sealed "${tasks#sealed:}" --sign ;;
+            *)        node harness/regrade.mjs --run "$RUNNER_TEMP/verified-run" --sign ;;
+          esac
+      - name: Attest provenance of the second grading
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ runner.temp }}/verified-run/regrade.json
+      - name: Keep the attestation bundle beside it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/verified-run/provenance" && gh attestation download ../regrade.json -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl regrade.json.sigstore.jsonl && ls -la
+      - name: Check the whole run as a reader would, second grading included
+        run: |
+          mkdir -p "$RUNNER_TEMP/runs" && cp -R "$RUNNER_TEMP/verified-run" "$RUNNER_TEMP/runs/"
+          node harness/check-verified-run.mjs "$RUNNER_TEMP/runs"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-run-regraded
           path: ${{ runner.temp }}/verified-run
