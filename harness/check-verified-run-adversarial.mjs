@@ -61,8 +61,8 @@ function caught(name, mutate, expectCheck) {
 const signer = m.runSignerFromSeed('legate-verified-run', 'Legate verified-run harness (demo)');
 const gateway = { priv: m.GATEWAY_DEMO_SEED };
 const resign = (mf) => {
-  const { type, version, run_id, standard: s, agent, harness, dataset, environment, gateway: g, attempts, summary, signer: sg, issued_at, nonce } = mf;
-  return m.createRunManifest({ standard: s, agent, harness, dataset, environment, gateway: g, attempts, summary }, signer, new Date(issued_at), { run_id, nonce });
+  const { type, version, run_id, standard: s, agent, harness, dataset, environment, gateway: g, model_calls, attempts, summary, signer: sg, issued_at, nonce } = mf;
+  return m.createRunManifest({ standard: s, agent, harness, dataset, environment, gateway: g, ...(model_calls ? { model_calls } : {}), attempts, summary }, signer, new Date(issued_at), { run_id, nonce });
 };
 
 console.log(`adversarial suite against ${dir}:`);

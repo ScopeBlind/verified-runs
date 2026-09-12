@@ -5922,7 +5922,7 @@ function verifyAttestedCalls(calls, attestations, expectModel = null) {
 var RUN_MANIFEST_V1 = "scopeblind.run_manifest.v1";
 var RUN_MANIFEST_DOMAIN = "scopeblind.run-manifest.v1";
 var encoder2 = new TextEncoder();
-var MANIFEST_UNSIGNED_KEYS = ["type", "version", "run_id", "standard", "agent", "harness", "dataset", "environment", "gateway", "attempts", "summary", "signer", "issued_at", "nonce"];
+var MANIFEST_UNSIGNED_KEYS = ["type", "version", "run_id", "standard", "agent", "harness", "dataset", "environment", "gateway", "model_calls", "attempts", "summary", "signer", "issued_at", "nonce"];
 var RUN_REGRADE_V1 = "scopeblind.run_regrade.v1";
 var RUN_REGRADE_DOMAIN = "scopeblind.run-regrade.v1";
 var REGRADE_UNSIGNED_KEYS = ["type", "version", "run_id", "manifest_digest", "grader", "environment", "results", "regraded_at", "nonce"];
@@ -5971,6 +5971,7 @@ function createRunManifest(draft, signer, now = /* @__PURE__ */ new Date(), ids 
     dataset: draft.dataset,
     environment: draft.environment,
     gateway: draft.gateway,
+    ...draft.model_calls ? { model_calls: draft.model_calls } : {},
     attempts: draft.attempts,
     summary: draft.summary,
     signer: { name: signer.name, key_id: signer.key_id, verification_key: signer.verification_key },
