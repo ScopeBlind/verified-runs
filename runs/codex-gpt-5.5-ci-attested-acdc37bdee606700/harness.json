@@ -1,0 +1,16 @@
+{
+  "name": "legate-verified-run",
+  "digest": "sha256:f870a5d5f86cb8dc8a57a233c92dbde127161d2b4fd8fb196a5b0d5ff4a1f4d8",
+  "files": [
+    {
+      "name": "verified-run.mjs",
+      "sha256": "223701e63b71790adc7b095d901366357947eb635b3f799b1019f78b038d2aa6"
+    },
+    {
+      "name": "legate-run.core.mjs",
+      "sha256": "6bcf8a7c6934aec8c30444578570f8719b1d7d63ba36375e61f5f171160de123"
+    }
+  ],
+  "gateway": "protect-mcp 0.13.3",
+  "rule": "The digest is over the canonical JSON of {name, files:[{name, sha256}]}; the files are the harness and the run core it runs on."
+}

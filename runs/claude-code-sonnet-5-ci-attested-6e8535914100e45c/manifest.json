@@ -1,0 +1,181 @@
+{
+  "type": "scopeblind.run_manifest.v1",
+  "version": 1,
+  "run_id": "run:6e8535914100e45c",
+  "standard": {
+    "request_id": "pr:7a1e5b9c3d2f4e60",
+    "digest": "c1a76c91c228a75865b1e2d9b4b18ad617b536f48b41d82488c869aff55d20f7",
+    "recipient_key": "6c360b0c2def60adf93e97019f61df31d2670bbc3bfad933859dc1663c1d9eac",
+    "policy_digest": "sha256:f66814a5fd94d740bec9e5c16ace13968a91da224fa49706dc8da2fb651ca89b"
+  },
+  "agent": {
+    "name": "claude-code",
+    "version": "2.1.269",
+    "model": "claude-sonnet-5",
+    "model_route": "api.anthropic.com (Claude Code)"
+  },
+  "harness": {
+    "name": "legate-verified-run",
+    "digest": "sha256:f870a5d5f86cb8dc8a57a233c92dbde127161d2b4fd8fb196a5b0d5ff4a1f4d8",
+    "gateway": "protect-mcp 0.13.3"
+  },
+  "dataset": {
+    "name": "terminal-bench/original-tasks",
+    "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+    "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c",
+    "task_count": 4
+  },
+  "environment": {
+    "sandbox": "Claude Code sandbox, network disabled (Linux bubblewrap)",
+    "egress": [],
+    "attestation": {
+      "kind": "github-actions-provenance",
+      "reference": "https://github.com/ScopeBlind/verified-runs/actions/runs/34664929869",
+      "digest": "sha256:ef16b85fcb359441eb7094de9c69e83bff2d5f5269d045dee8b567749511b758"
+    },
+    "note": "Run in GitHub Actions (https://github.com/ScopeBlind/verified-runs/actions/runs/34664929869); the provenance attestation for manifest.json, receipts.jsonl, and standard.json is on that run. Task paths were rebased from /app to a workspace and the tests were run with the same rebase."
+  },
+  "gateway": {
+    "key_id": "sb:issuer:GsAFpSRUAvaU",
+    "verification_key": "ebb8cf3efc78717c50e7c438c0ad5498f8fa4e09607fea1e030ac129b5965225",
+    "receipt_count": 20,
+    "chain_head": "sha256:cdaee961dd5d4ed333add55d56eb6f8081b8c3a9ca37b077be1918e8eea66ec1",
+    "log_digest": "sha256:486a57bdd03a94fea411fe1beca0b9e3447eb6a9fd436e31569471bddf30661e",
+    "calls_digest": "sha256:f61cd9547f046666ead8b877a8fb82336e59295fd851a611d451ca6a3a14cfe5",
+    "calls_disclosed": true
+  },
+  "attempts": [
+    {
+      "task_id": "hello-world",
+      "attempt": 1,
+      "started_at": "2026-09-12T01:29:00.924Z",
+      "ended_at": "2026-09-12T01:29:11.379Z",
+      "receipts": {
+        "from": 0,
+        "to": 2
+      },
+      "calls": 2,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:1e5e5286d813863f4572b2e16a3c3fc402f08c9155f1b1062cb6518e7eebeb67"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:7b6a3d9729f90623318d55dfb3a3e0b8920a2291572176154f4e16fb0302ce03",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "started_at": "2026-09-12T01:29:11.863Z",
+      "ended_at": "2026-09-12T01:29:27.937Z",
+      "receipts": {
+        "from": 2,
+        "to": 4
+      },
+      "calls": 2,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:36e52675f028ee34bf3bcda3e5e6f71cbd79e4747ec567f5fc0da3fd6aa8cf00"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:a5f6371ef68ea15b2c16b412520dc6068e80283332dd99b1b6a6a81f7be796bd",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "started_at": "2026-09-12T01:29:28.350Z",
+      "ended_at": "2026-09-12T01:30:10.263Z",
+      "receipts": {
+        "from": 4,
+        "to": 12
+      },
+      "calls": 8,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 1,
+        "failed": 0,
+        "output_digest": "sha256:d6de475e8ae92ac8cd1a6809adb5f20f497637a344ecff736f572e4d48cb0c46"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:bb533ad5960730aa22819c66ede0159465d329caad3c9d139951116971721bad",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "started_at": "2026-09-12T01:30:10.667Z",
+      "ended_at": "2026-09-12T01:31:25.955Z",
+      "receipts": {
+        "from": 12,
+        "to": 20
+      },
+      "calls": 8,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:62719df620c8aaede9983b47ea2845593599945369194d6bf05b5344ef1ffa64"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:e2cacc100990df513198f6ebe756674c16a2d0742bcb64dd102aee651755037d",
+        "file_count": 1,
+        "disclosed": true
+      }
+    }
+  ],
+  "summary": {
+    "tasks": 4,
+    "passed": 4,
+    "failed": 0,
+    "errored": 0,
+    "calls": 20,
+    "refused": 0
+  },
+  "signer": {
+    "name": "Legate verified-run harness (demo)",
+    "key_id": "harness:faef67591c23b631",
+    "verification_key": "33d3c584cbbb91063446ee05591b4226d15c464cefe7fb9e075cfc9db0910727"
+  },
+  "issued_at": "2026-09-12T01:31:26.360Z",
+  "nonce": "b792e1f0baf6f2ef3e175956481f3cd5",
+  "digest": "24d9b3566fa6a996e3892149383e1db29dcf9babb53d667f7a0d01741f2cb035",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "945740ed7bb526a7352196a905879594955ac2b540ff3bf7868a62f81ccbe13943794aa6219f613860d63eea783768fa9353faec8dfb6d2019ad49fb70b5df0a"
+  }
+}

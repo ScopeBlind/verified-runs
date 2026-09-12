@@ -19,7 +19,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const web = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // The run to attack: given on the command line, else the first run under ./runs (public repository) or the monorepo's committed run.
 import { existsSync, readdirSync } from 'node:fs';
-const firstRun = (base) => (existsSync(base) ? readdirSync(base).map((n) => join(base, n)).find((d) => existsSync(join(d, 'manifest.json'))) : null);
+// Prefer a run that carries the calls log and a second grading, so every mutation the suite knows has something to bite.
+const firstRun = (base) => {
+  if (!existsSync(base)) return null;
+  const runs = readdirSync(base).sort().map((n) => join(base, n)).filter((d) => existsSync(join(d, 'manifest.json')));
+  return runs.find((d) => existsSync(join(d, 'regrade.json')) && existsSync(join(d, 'calls.jsonl'))) ?? runs[0] ?? null;
+};
 const dir = resolve(process.argv[2] ?? firstRun(join(web, 'runs')) ?? resolve(web, '../samples/verified-run'));
 const m = await import(pathToFileURL(join(web, 'verify/legate-run.core.mjs')).href);
 const read = (p) => JSON.parse(readFileSync(join(dir, p), 'utf8'));
