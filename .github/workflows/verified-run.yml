@@ -86,8 +86,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "$RUNNER_TEMP/verified-run/provenance" && cd "$RUNNER_TEMP/verified-run/provenance"
+          # The standard is deterministic, so its digest carries one attestation per run that used it; keep this run's.
+          keep_this_run() { node -e 'const fs=require("fs");const [f,run]=process.argv.slice(1);const keep=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter((l)=>{try{const s=JSON.parse(Buffer.from(JSON.parse(l).dsseEnvelope.payload,"base64").toString("utf8"));return String(s.predicate?.runDetails?.metadata?.invocationId||"").includes("/runs/"+run+"/");}catch{return false;}});if(!keep.length)throw new Error("no attestation from this run in "+f);fs.writeFileSync(f,keep.join("\n")+"\n");' "$1" "$GITHUB_RUN_ID"; }
           for f in manifest.json receipts.jsonl standard.json; do
-            gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$f.sigstore.jsonl"
+            gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$f.sigstore.jsonl" && keep_this_run "$f.sigstore.jsonl"
           done
           ls -la
       - uses: actions/upload-artifact@v4
@@ -130,7 +132,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd "$RUNNER_TEMP/verified-run/provenance" && gh attestation download ../regrade.json -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl regrade.json.sigstore.jsonl && ls -la
+          cd "$RUNNER_TEMP/verified-run/provenance" && gh attestation download ../regrade.json -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl regrade.json.sigstore.jsonl
+          node -e 'const fs=require("fs");const [f,run]=process.argv.slice(1);const keep=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter((l)=>{try{const s=JSON.parse(Buffer.from(JSON.parse(l).dsseEnvelope.payload,"base64").toString("utf8"));return String(s.predicate?.runDetails?.metadata?.invocationId||"").includes("/runs/"+run+"/");}catch{return false;}});if(!keep.length)throw new Error("no attestation from this run in "+f);fs.writeFileSync(f,keep.join("\n")+"\n");' regrade.json.sigstore.jsonl "$GITHUB_RUN_ID" && ls -la
       - name: Read the run with the published verifier, provenance included
         run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl" --calls "$RUNNER_TEMP/verified-run/calls.jsonl" --regrade "$RUNNER_TEMP/verified-run/regrade.json" --provenance "$RUNNER_TEMP/verified-run/provenance"
       - name: Check the whole run as a reader would, second grading included

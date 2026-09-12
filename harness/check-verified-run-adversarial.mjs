@@ -144,5 +144,15 @@ if (baseBundles) {
   caught('an inclusion-proof hash altered', (c) => { const pr = c.provenance.bundles[0].verificationMaterial.tlogEntries[0].inclusionProof; pr.hashes[0] = flipB64(pr.hashes[0], 0); }, /provenance_1_inclusion/);
   caught('the signing certificate replaced by another workflow certificate', (c) => { const cert = Buffer.from(c.provenance.bundles[0].verificationMaterial.certificate.rawBytes, 'base64'); cert[cert.length - 24] ^= 1; c.provenance.bundles[0].verificationMaterial.certificate.rawBytes = cert.toString('base64'); }, /provenance_1_certificate|provenance_1_signature/);
   caught('the manifest file edited after attestation (a byte appended)', (c) => { c.provenance.bytes.manifest = `${c.provenance.bytes.manifest}\n`; }, /provenance_manifest/);
+
+  // And the other way round: a bundle made in another run (a deterministic standard is attested by every run that used
+  // it) verifies on its own terms, does not count, and must not unbind this run.
+  const sibling = readdirSync(dirname(dir)).map((n) => join(dirname(dir), n)).filter((d) => d !== dir && existsSync(join(d, 'provenance'))).flatMap((d) => readdirSync(join(d, 'provenance')).filter((f) => f.endsWith('.sigstore.jsonl')).map((f) => readFileSync(join(d, 'provenance', f), 'utf8').split('\n').filter((l) => l.trim())[0])).map((l) => JSON.parse(l)).find((b) => !baseBundles.some((x) => JSON.stringify(x) === JSON.stringify(b)));
+  if (sibling) {
+    const v = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined, provenance: { bundles: [...clone(baseBundles), clone(sibling)], bytes: { ...baseBytes } } }, NOW);
+    const foreignIdentity = v.checks.find((c) => /^provenance_\d+_identity$/.test(c.id) && c.informational);
+    assert.ok(v.binding === baseline.binding && v.provenance?.verified === true && foreignIdentity, `a valid bundle from another run unbound this run (binding=${v.binding})`);
+    passed++; console.log('  ✓ not caught, rightly: a valid bundle from another run beside this run\'s counts for nothing and unbinds nothing');
+  }
 }
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);
