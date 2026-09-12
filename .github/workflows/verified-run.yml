@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       agent:
-        description: 'codex or claude'
+        description: 'codex, claude, or attested (a minimal loop on an attested inference route; needs NEARAI_CLOUD_API_KEY)'
         default: codex
       tasks:
         description: 'comma-separated Terminal-Bench task ids, or sealed:<path>'
@@ -63,6 +63,7 @@ jobs:
       - name: Verified run
         env:
           CLAUDE_CODE_OAUTH_TOKEN_RAW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          NEARAI_CLOUD_API_KEY: ${{ secrets.NEARAI_CLOUD_API_KEY }}
           SEALED_TASKS_KEY: ${{ secrets.SEALED_TASKS_KEY }}
           GH_TOKEN: ${{ github.token }}
           LEGATE_ATTEST: github-actions-provenance

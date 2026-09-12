@@ -42,13 +42,16 @@ const provenanceDir = join(dir, 'provenance');
 const baseBundles = existsSync(provenanceDir) ? readdirSync(provenanceDir).filter((f) => f.endsWith('.sigstore.jsonl')).sort().flatMap((f) => readFileSync(join(provenanceDir, f), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))) : null;
 const baseBytes = baseBundles ? { manifest: readFileSync(join(dir, 'manifest.json'), 'utf8'), receipts: readFileSync(join(dir, 'receipts.jsonl'), 'utf8'), standard: readFileSync(join(dir, 'standard.json'), 'utf8'), ...(existsSync(join(dir, 'regrade.json')) ? { regrade: readFileSync(join(dir, 'regrade.json'), 'utf8') } : {}) } : null;
 const baseProvenance = () => (baseBundles ? { bundles: clone(baseBundles), bytes: { ...baseBytes } } : undefined);
+// The attested model route, when the run has one: the signed model calls and the attestation reports.
+const baseModelCalls = existsSync(join(dir, 'model-calls.jsonl')) ? readFileSync(join(dir, 'model-calls.jsonl'), 'utf8') : null;
+const baseModelAttestations = existsSync(join(dir, 'model-attestation.json')) ? JSON.parse(readFileSync(join(dir, 'model-attestation.json'), 'utf8')) : null;
 
 let passed = 0;
 /** A mutation must leave the run unbound and fail the named check (or fail to verify at all). */
 function caught(name, mutate, expectCheck) {
-  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: baseRegrade ? clone(baseRegrade) : undefined, calls: baseCalls ? clone(baseCalls) : undefined, provenance: baseProvenance() };
+  const ctx = { standard: clone(standard), receipts: clone(receipts), manifest: clone(manifest), regrade: baseRegrade ? clone(baseRegrade) : undefined, calls: baseCalls ? clone(baseCalls) : undefined, provenance: baseProvenance(), modelCalls: baseModelCalls ?? undefined, modelAttestations: baseModelAttestations ? clone(baseModelAttestations) : undefined };
   mutate(ctx);
-  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls, provenance: ctx.provenance }, NOW);
+  const v = m.verifyRunManifest(ctx.manifest, { standard: ctx.standard, receipts: ctx.receipts, regrade: ctx.regrade, calls: ctx.calls, provenance: ctx.provenance, modelCalls: ctx.modelCalls, modelAttestations: ctx.modelAttestations }, NOW);
   const failed = v.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
   const okCond = v.binding !== 'bound' && (expectCheck === null || failed.some((id) => expectCheck.test(id)));
   assert.ok(okCond, `${name}: verifier accepted it (binding=${v.binding}, failed=[${failed.join(', ')}])`);
@@ -64,7 +67,7 @@ const resign = (mf) => {
 
 console.log(`adversarial suite against ${dir}:`);
 // The verifier's baseline: the committed run binds (with its second grading and calls when it has them; a run made before those existed may leave only the verdict-evidence check open).
-const baseline = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined, provenance: baseProvenance() }, NOW);
+const baseline = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, calls: baseCalls ?? undefined, provenance: baseProvenance(), modelCalls: baseModelCalls ?? undefined, modelAttestations: baseModelAttestations ? clone(baseModelAttestations) : undefined }, NOW);
 const baselineOpen = baseline.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
 assert.ok(baseline.binding === 'bound' || baselineOpen.every((id) => id === 'verdict_evidence'), `the committed run does not bind; nothing to test against (${baselineOpen.join(', ')})`);
 
@@ -154,5 +157,16 @@ if (baseBundles) {
     assert.ok(v.binding === baseline.binding && v.provenance?.verified === true && foreignIdentity, `a valid bundle from another run unbound this run (binding=${v.binding})`);
     passed++; console.log('  ✓ not caught, rightly: a valid bundle from another run beside this run\'s counts for nothing and unbinds nothing');
   }
+}
+
+// The attested model route: the model's TEE signed every call, and the reports bind the keys; each can be attacked.
+if (baseModelCalls && baseModelAttestations) {
+  const editRecord = (text, i, fn) => text.split('\n').filter(Boolean).map((l, k) => (k === i ? JSON.stringify(fn(JSON.parse(l))) : l)).join('\n') + '\n';
+  caught('a model call\'s response digest rewritten (the signature no longer recovers)', (c) => { c.modelCalls = editRecord(c.modelCalls, 0, (r) => ({ ...r, response_sha256: 'a'.repeat(64) })); }, /model_calls_digest|model_calls_bind/);
+  caught('a model call re-signed by an unattested key', (c) => { c.modelCalls = editRecord(c.modelCalls, 0, (r) => ({ ...r, signature: '0x' + '11'.repeat(65), signing_address: '0x' + '22'.repeat(20) })); }, /model_calls_digest|model_calls_bind/);
+  caught('the attestation report\'s quote altered (one measured byte)', (c) => { const q = Buffer.from(c.modelAttestations[0].intel_quote, 'hex'); q[48 + 520 + 3] ^= 1; c.modelAttestations[0].intel_quote = q.toString('hex'); }, /model_attestation/);
+  caught('the attestation report replaced by one binding another key', (c) => { c.modelAttestations[0].signing_address = '0x' + '33'.repeat(20); }, /model_attestation/);
+  caught('the manifest re-signed to attest a different model', (c) => { c.manifest.environment.model_attestation.model = 'someone/else'; c.manifest = resign(c.manifest); }, /model_attestation_pin|model_calls_bind/);
+  caught('a model call dropped from the log', (c) => { c.modelCalls = c.modelCalls.split('\n').filter(Boolean).slice(1).join('\n') + '\n'; }, /model_calls_digest/);
 }
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);

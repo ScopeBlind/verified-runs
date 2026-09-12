@@ -27,6 +27,14 @@ For a run made by the workflow in this repository, GitHub's build provenance cov
 gh attestation verify runs/<run>/manifest.json --owner scopeblind
 ```
 
+## An attested model route
+
+A run made with `--agent attested` names its model with evidence instead of a declaration. The agent is a minimal loop on an inference provider that runs the model in a confidential virtual machine and signs, inside it, the digest of every request and response (NEAR AI Cloud's shape). The run carries `model-calls.jsonl` (one signed record per call), `model-attestation.json` (the provider's report for each signing key: an Intel TDX quote whose report_data binds the key), and `model-calls-bodies.jsonl` (the bytes, published or held). The verifier checks each signature, verifies each quote offline to the Intel SGX Root CA it pins (quote signature, quoting-enclave binding and signature, PCK chain, validity), checks the key binding and the nonce in report_data, and holds every call to the model the standard names. Not established: the platform's current TCB status, the GPU verdict (NVIDIA's online service; its evidence is kept beside the report), and what the model did with the bytes beyond signing them. `harness/check-verified-run.mjs` also proves the primitives on every push against a real sample quote (`harness/fixtures/`, from the dcap-qvl project, MIT) and the provider's documented signature vector.
+
+```bash
+NEARAI_CLOUD_API_KEY=... node harness/verified-run.mjs --agent attested --model Qwen/Qwen3.8-27B --tasks hello-world,countdown-game --out runs/my-run
+```
+
 ## What the chain establishes, exactly
 
 Removing a receipt from the front leaves the next one pointing at a predecessor that is not there; the verifier reports the link as dangling. Removing receipts from the end changes the last receipt's hash and the count, both of which the manifest pins; head alone would not be enough, head and count together are. A chain re-signed from scratch needs the keys, which is why the standard names the gateway, harness, and grader keys it accepts, and why demonstration keys prove the mechanism only. Every receipt records the call the gate saw and the digest of its input, not what the call did; `calls.jsonl` opens the digests, and a reader, not the gate, judges what a shell command reached. The receipts are the calls the host routed through the hook; what the agent could reach without the hook is bounded by the sandbox, which the run declares and, in CI, provenance attests.

@@ -44,6 +44,17 @@ if (existsSync(join(web, 'src/legate-run-core.ts'))) {
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
+// 0b. The attestation primitives against known material: a real TDX quote verifies to the pinned Intel root, and the
+//     provider-documented model-call signature recovers to its address. If either breaks, every attested run would.
+{
+  const sample = readFileSync(join(here, 'fixtures', 'tdx-quote-sample.hex'), 'utf8').trim();
+  ok('a real Intel TDX quote verifies offline to the pinned Intel SGX Root CA', m.verifyTdxQuote(sample, new Date('2026-09-12T00:00:00Z')).valid);
+  const flipped = Buffer.from(sample.replace(/^0x/, ''), 'hex'); flipped[48 + 520 + 3] ^= 1;
+  ok('the sample quote parses to its measurements', m.parseTdxQuote(sample).measurements.mr_td.length === 96);
+  ok('a TDX quote with one measured byte changed fails on its signature', m.verifyTdxQuote(new Uint8Array(flipped), new Date('2026-09-12T00:00:00Z')).checks.some((c) => c.id === 'quote_signature' && !c.ok));
+  ok('a documented model-call signature recovers to its signing address', m.recoverSigner({ index: 0, model: 'Qwen/Qwen3.5-122B-A10B', kind: 'provider_tee', request_sha256: '2974f24b2a687856d2a0cf08d813902965c25e6552ba7062e4fa303432b6d2ad', response_sha256: '8cb30eef9d133bdc6bfe812772dc4a62336d2827caea843546cbeff3f004c42c', signature: '0xed381e84d059198d1826e44dbbbac9501caaa8f79f913f27578acafa5be852e6103fe34fabd6446d7fde3f5250c0a16e109fe088a562bae08ac13d081a66d0761b', signing_address: '0x6525e128afcffebf7eed05d485d7be983cdae934', signing_algo: 'ecdsa' }) === '0x6525e128afcffebf7eed05d485d7be983cdae934');
+}
+
 const sampleDirs = readdirSync(samples).map((n) => join(samples, n)).filter((d) => existsSync(join(d, 'manifest.json')) && existsSync(join(d, 'standard.json')));
 assert.ok(sampleDirs.length >= 1, 'no committed verified run found');
 for (const dir of sampleDirs) {
@@ -89,6 +100,18 @@ for (const dir of sampleDirs) {
     ok('every receipt opens to the call the log records (tool and input digest)', m.verifyRunManifest(manifest, { standard, receipts, calls: calls.map((c) => ({ tool: c.tool, input: c.input })) }, NOW).checks.find((c) => c.id === 'calls_bind')?.ok === true);
   } else if (manifest.gateway.calls_digest) {
     ok('the calls log is held, and the manifest says so', manifest.gateway.calls_disclosed === false);
+  }
+  // The attested model route, when the run has one: every model call signed inside the model's TEE, every report verified to Intel's root.
+  const modelCallsPath = join(dir, 'model-calls.jsonl');
+  if (manifest.environment.model_attestation || existsSync(modelCallsPath)) {
+    ok('a run with an attested model route carries its signed model calls and its attestation reports', !!manifest.environment.model_attestation && !!manifest.model_calls && existsSync(modelCallsPath) && existsSync(join(dir, 'model-attestation.json')));
+    const modelCalls = readFileSync(modelCallsPath, 'utf8');
+    const modelAttestations = JSON.parse(readFileSync(join(dir, 'model-attestation.json'), 'utf8'));
+    const av = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade, modelCalls, modelAttestations }, NOW);
+    const failed = av.checks.filter((c) => (c.id.startsWith('model_') || c.id === 'model_route') && !c.ok).map((c) => `${c.id}: ${c.detail}`);
+    ok(`every model call (${manifest.model_calls?.count ?? 0}) was signed inside the model's TEE and every attestation report (${modelAttestations.length}) verifies offline to Intel's root${failed.length ? `: ${failed.join('; ')}` : ''}`, failed.length === 0 && av.checks.some((c) => c.id === 'model_calls_bind' && c.ok && !c.informational));
+    ok('the standard names the attested provider and model the manifest carries', standard.requirements.run?.model_attestation?.model === manifest.environment.model_attestation?.model && av.checks.some((c) => c.id === 'model_attestation_pin' && c.ok));
+    if (manifest.model_calls?.disclosed) ok('the model-call bodies are published and each hashes to its record', (() => { const bodies = readFileSync(join(dir, 'model-calls-bodies.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); const records = modelCalls.split('\n').filter(Boolean).map((l) => JSON.parse(l)); return bodies.length === records.length && bodies.every((b, i) => sha256Bytes(Buffer.from(b.request, 'utf8')) === records[i].request_sha256 && sha256Bytes(Buffer.from(b.response, 'utf8')) === records[i].response_sha256); })());
   }
   const workspaces = {};
   for (const a of manifest.attempts) {

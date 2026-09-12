@@ -41,7 +41,7 @@
  * is made in CI with provenance; model calls are declared, not observed.
  */
 import { spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { createDecipheriv } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -76,11 +76,6 @@ const keepWorkspace = args.includes('--keep');
 // carries their digests either way, so a held file is still bound.
 const discloseCalls = args.includes('--disclose-calls') ? true : args.includes('--no-disclose-calls') ? false : !sealedPath;
 const discloseWorkspace = args.includes('--disclose-workspace') ? true : args.includes('--no-disclose-workspace') ? false : !sealedPath;
-// The attested agent's model calls: the signed records (digests and signatures) are always published; the request and
-// response bodies are disclosed for a public task set and held for a sealed one, like the calls log.
-const discloseModelCalls = args.includes('--disclose-model-calls') ? true : args.includes('--no-disclose-model-calls') ? false : !sealedPath;
-const providerUrl = flag('--provider-url', 'https://cloud-api.near.ai/v1').replace(/\/$/, '');
-const providerHost = new URL(providerUrl).host;
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const sha256Bytes = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -195,118 +190,9 @@ const AGENTS = {
       return { exit_code: r.status, timed_out: r.signal === 'SIGTERM' && r.status === null, stderr: r.stderr ?? '', stdout: r.stdout ?? '' };
     },
   },
-  // A minimal agent loop whose model route is attested: every completion comes from a provider that signs the
-  // request and response digests inside the model's TEE (NEAR AI Cloud's shape), and the attestation report that
-  // binds the signing key to Intel-measured hardware is fetched and verified offline before the call counts.
-  // Tool calls go through the same gate hook as the other agents; the model never sees the provider key.
-  attested: {
-    name: 'legate-attested-loop',
-    format: 'claude',
-    model: flag('--model', 'Qwen/Qwen3.8-27B'),
-    model_route: `${providerHost} (attested TDX inference)`,
-    model_attestation: { provider: 'near-ai-cloud', model: flag('--model', 'Qwen/Qwen3.8-27B') },
-    allowed_tools: flag('--allowed-tools', 'Bash').split(','),
-    sandbox: hasBwrap() ? 'Linux bubblewrap for tool commands (network disabled); the harness makes the model calls over TLS to the attested provider' : 'No sandbox for tool commands (they run on the harness host); the harness makes the model calls over TLS to the attested provider',
-    egress: [providerHost],
-    version: () => 'legate-attested-loop 1.0',
-    hooks() { return null; },
-    run: (ws, instruction, model, limitSeconds, trust, ctx) => attestedLoop(ws, instruction, model, limitSeconds, ctx),
-  },
 };
 const agent = AGENTS[agentName];
 if (!agent) { console.error(`unknown agent ${agentName}; one of ${Object.keys(AGENTS).join(', ')}`); process.exit(1); }
-const apiKey = process.env.NEARAI_CLOUD_API_KEY ?? '';
-if (agent.model_attestation && !apiKey) { console.error('the attested agent needs NEARAI_CLOUD_API_KEY (an API key for the attested inference provider)'); process.exit(1); }
-function hasBwrap() { return process.platform === 'linux' && spawnSync('bwrap', ['--version'], { encoding: 'utf8' }).status === 0; }
-
-// ── Attested inference: the model's TEE signs every call, and its report binds the key to hardware ─────────
-const modelCallRecords = [];      // what is published: digests and signatures, one per call
-const modelCallBodies = [];       // the request and response bytes, disclosed or held
-const attestationReports = new Map(); // signing address -> the report as fetched (plus the nonce used and when)
-const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-async function providerFetch(path, init = {}) {
-  const res = await fetch(`${providerUrl}${path}`, { ...init, headers: { accept: 'application/json', authorization: `Bearer ${apiKey}`, ...(init.headers ?? {}) }, signal: AbortSignal.timeout(180_000) });
-  return { status: res.status, text: await res.text() };
-}
-async function fetchSignature(chatId, model) {
-  let last = '';
-  for (let i = 0; i < 12; i++) {
-    const r = await providerFetch(`/signature/${encodeURIComponent(chatId)}?model=${encodeURIComponent(model)}&signing_algo=ecdsa`).catch((e) => ({ status: 0, text: String(e) }));
-    if (r.status === 200) { try { const j = JSON.parse(r.text); if (j.signature && j.signing_address && j.text) return j; } catch { /* retry */ } }
-    last = `${r.status} ${r.text.slice(0, 200)}`;
-    await pause(1500); // the signature is cached on the node that served the call; another node answers "not found"
-  }
-  throw new Error(`no signature for chat ${chatId} after 12 attempts (${last})`);
-}
-async function ensureAttestation(address, model) {
-  if (attestationReports.has(address)) return;
-  let last = '';
-  for (let i = 0; i < 8; i++) {
-    const nonce = randomBytes(32).toString('hex');
-    const r = await providerFetch(`/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ecdsa&nonce=${nonce}&signing_address=${encodeURIComponent(address)}`).catch((e) => ({ status: 0, text: String(e) }));
-    if (r.status !== 200) { last = `${r.status} ${r.text.slice(0, 200)}`; await pause(1500); continue; }
-    const report = { ...JSON.parse(r.text), request_nonce: nonce, fetched_at: new Date().toISOString(), provider: 'near-ai-cloud' };
-    const v = m.verifyModelAttestation(report, { model, nonce });
-    if (!v.valid) throw new Error(`the attestation report for ${address} does not verify: ${v.checks.filter((c) => !c.ok).map((c) => `${c.id}: ${c.detail}`).join('; ')}`);
-    if (v.signing_address !== address) { last = `report binds ${v.signing_address}, wanted ${address}`; await pause(1000); continue; }
-    attestationReports.set(address, report);
-    console.log(`    attestation verified for ${address} (MRTD ${v.measurements.mr_td.slice(0, 16)}...)`);
-    return;
-  }
-  throw new Error(`no attestation report binding ${address} (${last})`);
-}
-async function attestedLoop(ws, instruction, model, limitSeconds, ctx) {
-  const deadline = Date.now() + limitSeconds * 1000;
-  const messages = [
-    { role: 'system', content: 'You complete one task in a workspace on this machine. Use the Bash tool to inspect and change files; each command runs with bash -lc in the workspace. Do not use the network. When the task is done, reply with a short summary and make no tool call.' },
-    { role: 'user', content: instruction },
-  ];
-  const tools = [{ type: 'function', function: { name: 'Bash', description: 'Run a shell command in the task workspace and return its exit status and output.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'The command to run with bash -lc' } }, required: ['command'] } } }];
-  const cmdEnv = { ...process.env }; for (const k of ['NEARAI_CLOUD_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'SEALED_TASKS_KEY', 'GH_TOKEN', 'GITHUB_TOKEN']) delete cmdEnv[k];
-  const bwrap = hasBwrap();
-  let lastText = '';
-  for (let turn = 0; turn < 40; turn++) {
-    if (Date.now() > deadline) return { exit_code: null, timed_out: true, stderr: '', stdout: lastText };
-    const body = JSON.stringify({ model, messages, tools, tool_choice: 'auto', stream: false, temperature: 0, max_tokens: 4096 });
-    const madeAt = new Date().toISOString();
-    const res = await providerFetch('/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
-    if (res.status !== 200) throw new Error(`model call failed: ${res.status} ${res.text.slice(0, 300)}`);
-    const requestDigest = sha256(body), responseDigest = sha256(res.text);
-    const resp = JSON.parse(res.text);
-    const sig = await fetchSignature(resp.id, model);
-    const kind = sig.signature_kind === 'gateway' ? 'gateway' : 'provider_tee';
-    const expectedText = kind === 'provider_tee' ? `${model}:${requestDigest}:${responseDigest}` : `${requestDigest}:${responseDigest}`;
-    if (sig.text !== expectedText) throw new Error(`the provider signed different bytes than the harness saw (signed "${String(sig.text).slice(0, 120)}", expected "${expectedText.slice(0, 120)}"); the call is not attested`);
-    const address = String(sig.signing_address).toLowerCase();
-    await ensureAttestation(address, model);
-    const record = { index: modelCallRecords.length, task_id: ctx.taskId, attempt: 1, model, kind, request_sha256: requestDigest, response_sha256: responseDigest, chat_id: String(resp.id), signature: sig.signature, signing_address: address, signing_algo: 'ecdsa', made_at: madeAt };
-    if (m.recoverSigner(record) !== address) throw new Error(`the signature for chat ${resp.id} does not recover to ${address}; the call is not attested`);
-    modelCallRecords.push(record);
-    modelCallBodies.push({ index: record.index, request: body, response: res.text });
-    const msg = resp.choices?.[0]?.message;
-    if (!msg) throw new Error('the model returned no message');
-    messages.push({ role: 'assistant', content: msg.content ?? '', ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}) });
-    lastText = typeof msg.content === 'string' ? msg.content : '';
-    if (!msg.tool_calls?.length) return { exit_code: 0, timed_out: false, stderr: '', stdout: lastText };
-    for (const tc of msg.tool_calls) {
-      let args = {}; try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { args = { command: String(tc.function?.arguments ?? '') }; }
-      const toolName = String(tc.function?.name ?? '');
-      const toolInput = toolName === 'Bash' ? { command: String(args.command ?? '') } : args;
-      // Every call goes through the gate, whatever the model called it; the gate receipts the decision either way.
-      const gate = spawnSync('node', [ctx.hook], { input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: ctx.taskId, cwd: ws, tool_name: toolName, tool_input: toolInput }), encoding: 'utf8', timeout: 65_000, env: cmdEnv });
-      let result;
-      if (gate.status === 2) result = `Refused by the gate: ${(gate.stderr || '').trim().slice(0, 500)}`;
-      else if (gate.status !== 0) throw new Error(`the gate hook failed (exit ${gate.status}): ${(gate.stderr || '').slice(0, 300)}`);
-      else {
-        const argv = bwrap ? ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--bind', ws, ws, '--unshare-net', '--die-with-parent', '--chdir', ws, 'bash', '-lc', toolInput.command] : ['bash', '-lc', toolInput.command];
-        const r = spawnSync(argv[0], argv.slice(1), { cwd: ws, encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024, env: cmdEnv });
-        result = `exit ${r.status === null ? 'timeout' : r.status}\n${(r.stdout ?? '').slice(0, 10_000)}${r.stderr ? `\nstderr:\n${r.stderr.slice(0, 2_000)}` : ''}`;
-      }
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
-    }
-  }
-  return { exit_code: 0, timed_out: false, stderr: 'turn limit reached', stdout: lastText };
-}
 
 // The gate hook. Written into each workspace from this constant so the harness
 // digest covers it. It records the decision first (allowed or refused, chained
@@ -446,7 +332,7 @@ try {
       environment_class_min: 'sandbox', approver_assurance_min: 'policy_automatic',
       human_approval: { required_above: null, distinct_approvers: 1 }, authority_max_age_seconds: 900,
       coverage: 'governed_route', effect_evidence: 'independently_reconciled', anchoring: 'self_attested', partial_settlement_permitted: false,
-      run: { allowed_tools: agent.allowed_tools, egress_allowlist: agent.egress, attempts_per_task: 1, dataset: { name: datasetName, revision: datasetRevision, digest: datasetDigest }, harness: { name: 'legate-verified-run', digest: harnessDigest }, time_limit_seconds: timeLimit, model_route: agent.model_route, ...(agent.model_attestation ? { model_attestation: agent.model_attestation } : {}) },
+      run: { allowed_tools: agent.allowed_tools, egress_allowlist: agent.egress, attempts_per_task: 1, dataset: { name: datasetName, revision: datasetRevision, digest: datasetDigest }, harness: { name: 'legate-verified-run', digest: harnessDigest }, time_limit_seconds: timeLimit, model_route: agent.model_route },
     },
     trust: { accepted_gate_keys: [m.GATEWAY_DEMO_PUBLIC_KEY], accepted_approver_keys: [], accepted_readback_sources: [signer.verification_key, grader.verification_key], accepted_anchor_witnesses: [] },
     disclosure: { required_fields: ['tool calls', 'verdicts', 'chain head'], inspection: 'on_request' },
@@ -511,8 +397,7 @@ try {
     const from = receiptCount();
     const started = new Date();
     console.log(`  running ${task.id} with ${agent.name}…`);
-    const modelCallsFrom = modelCallRecords.length;
-    const run = await agent.run(ws, instruction, agent.model, task.limit, trust, { hook, taskId: task.id });
+    const run = agent.run(ws, instruction, agent.model, task.limit, trust);
     const ended = new Date();
     const to = receiptCount();
     // An agent that finished with no receipted call did its work outside the gate; that is not a governed run, whatever the tests say.
@@ -541,7 +426,7 @@ try {
     wsFiles.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const wsDigest = m.workspaceDigest(wsFiles);
     workspaces[task.id] = { type: 'legate.workspace_archive.v1', task_id: task.id, attempt: 1, digest: wsDigest, files: wsFiles };
-    attempts.push({ ...(agent.model_attestation ? { model_calls: { from: modelCallsFrom, to: modelCallRecords.length } } : {}), task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, agent: { exit_code: run.exit_code, timed_out: run.timed_out }, workspace: { digest: wsDigest, file_count: wsFiles.length, disclosed: discloseWorkspace } });
+    attempts.push({ task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, agent: { exit_code: run.exit_code, timed_out: run.timed_out }, workspace: { digest: wsDigest, file_count: wsFiles.length, disclosed: discloseWorkspace } });
     testOutputs[task.id] = output;
     console.log(`    ${verdict}: ${passed} passed, ${failed} failed; ${to - from} governed calls, ${refused} refused; ${Math.round((ended - started) / 1000)} s`);
     if (!keepWorkspace) rmSync(ws, { recursive: true, force: true }); else console.log(`    workspace kept at ${ws}`);
@@ -556,16 +441,13 @@ try {
   const callsLog = callsText.split('\n').filter(Boolean).map((l) => JSON.parse(l));
   if (callsLog.length !== receipts.length) throw new Error(`the calls log has ${callsLog.length} entries for ${receipts.length} receipts; the hook did not record every call`);
   if (!receipts.every((r) => r.signature)) throw new Error('an unsigned line is in the receipt log; the gateway key was not used');
-  const modelCallsText = modelCallRecords.map((r) => JSON.stringify(r)).join('\n') + (modelCallRecords.length ? '\n' : '');
   const manifestDraft = {
-    ...(agent.model_attestation ? { model_calls: { digest: m.fileDigest(modelCallsText), count: modelCallRecords.length, disclosed: discloseModelCalls } } : {}),
     standard: { request_id: standard.request_id, digest: standard.digest, recipient_key: standard.recipient.verification_key, policy_digest: compiled.cedar.digest },
     agent: { name: agent.name, version: agent.version(), model: agent.model, model_route: agent.model_route },
     harness: { name: 'legate-verified-run', digest: harnessDigest, gateway: `protect-mcp ${protectVersion}` },
     dataset: { name: datasetName, revision: datasetRevision, digest: datasetDigest, task_count: tasks.length },
     environment: {
       sandbox: agent.sandbox, egress: agent.egress,
-      ...(agent.model_attestation ? { model_attestation: { provider: agent.model_attestation.provider, model: agent.model, reports: [...attestationReports.values()].map((r) => ({ digest: m.attestationReportDigest(r), signing_address: String(r.signing_address).toLowerCase() })) } } : {}),
       // In CI the manifest names its workflow run and the digest of the workflow file, but claims a provenance
       // attestation only when the workflow says one will be persisted (LEGATE_ATTEST): GitHub does not keep
       // attestations for user-owned private repositories, and a claim with nothing behind it would be a lie.
@@ -581,7 +463,7 @@ try {
     summary: { tasks: new Set(attempts.map((a) => a.task_id)).size, passed: attempts.filter((a) => a.verdict === 'pass').length, failed: attempts.filter((a) => a.verdict === 'fail').length, errored: attempts.filter((a) => a.verdict === 'error').length, calls: attempts.reduce((n, a) => n + a.calls, 0), refused: attempts.reduce((n, a) => n + a.refused, 0) },
   };
   const manifest = m.createRunManifest(manifestDraft, signer, new Date());
-  const verification = m.verifyRunManifest(manifest, { standard, receipts, calls: callsLog.map((c) => ({ tool: c.tool, input: c.input })), workspaces: Object.fromEntries(Object.entries(workspaces).map(([id, w]) => [id, w.files])), ...(agent.model_attestation ? { modelCalls: modelCallsText, modelAttestations: [...attestationReports.values()] } : {}) });
+  const verification = m.verifyRunManifest(manifest, { standard, receipts, calls: callsLog.map((c) => ({ tool: c.tool, input: c.input })), workspaces: Object.fromEntries(Object.entries(workspaces).map(([id, w]) => [id, w.files])) });
   // Without a second grading the standard's verdict-evidence check is open by design; everything else must bind.
   const open = verification.checks.filter((c) => !c.ok && !c.informational && c.id !== 'verdict_evidence');
   if (open.length) {
@@ -595,12 +477,7 @@ try {
   mkdirSync(join(outDir, 'policy'), { recursive: true }); mkdirSync(join(outDir, 'tests'));
   const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
   const heldDir = `${outDir}-held`;
-  if (!discloseCalls || !discloseWorkspace || (agent.model_attestation && !discloseModelCalls)) { rmSync(heldDir, { recursive: true, force: true }); mkdirSync(join(heldDir, 'workspace'), { recursive: true }); }
-  if (agent.model_attestation) {
-    writeFileSync(join(outDir, 'model-calls.jsonl'), modelCallsText);
-    writeFileSync(join(outDir, 'model-attestation.json'), json([...attestationReports.values()]));
-    writeFileSync(join(discloseModelCalls ? outDir : heldDir, 'model-calls-bodies.jsonl'), modelCallBodies.map((b) => JSON.stringify(b)).join('\n') + (modelCallBodies.length ? '\n' : ''));
-  }
+  if (!discloseCalls || !discloseWorkspace) { rmSync(heldDir, { recursive: true, force: true }); mkdirSync(join(heldDir, 'workspace'), { recursive: true }); }
   writeFileSync(join(discloseCalls ? outDir : heldDir, 'calls.jsonl'), callsText);
   mkdirSync(join(outDir, 'workspace'));
   for (const [id, w] of Object.entries(workspaces)) writeFileSync(join(discloseWorkspace ? outDir : heldDir, 'workspace', `${id}.json`), json(discloseWorkspace ? w : { ...w, files: w.files.map(({ content, ...rest }) => rest) }));
@@ -629,11 +506,6 @@ try {
     '| manifest.json | The harness\'s signed account: pins, every attempt with its receipts and test verdict, the chain head. |',
     '| task-set.json | The pinned task set: file paths and hashes at the benchmark commit, never the files. Reference solutions were never fetched. Dockerfile RUN lines, if any, are listed as not applied. |',
     '| harness.json | The harness pin: the digest of the harness file and the run core it runs on, as the standard names it. |',
-    ...(agent.model_attestation ? [
-      '| model-calls.jsonl | The harness, signed by the model\'s TEE | One record per model call: the digests of the exact request and response bytes, the TEE\'s signature over them, and the signing address. The manifest pins the log by digest and each attempt names its range. |',
-      '| model-attestation.json | The inference provider | The attestation report for each signing address: an Intel TDX quote whose report_data binds the signing key, verified offline against Intel\'s root; the manifest pins each report by digest. |',
-      '| model-calls-bodies.jsonl | The harness | The request and response bytes behind each record, published or held (held bodies stay with the maintainer; the digests bind them either way). |',
-    ] : []),
     '| provenance/ | GitHub Actions (when the run was made there) | Sigstore bundles for manifest.json, receipts.jsonl, standard.json, and regrade.json: the workflow, repository, commit, and run that produced these bytes, verified offline against the pinned Sigstore trust root by the verifier, or independently with gh attestation verify. |',
     '| oracle.json | The real engine\'s verdict on every counterexample the compiler emitted. |',
     '| tests/ | The harness\'s own pytest output per task; its digest is in the manifest. |',
