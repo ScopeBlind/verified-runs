@@ -279,16 +279,8 @@ async function attestedLoop(ws, instruction, model, limitSeconds, ctx) {
     if (Date.now() > deadline) return { exit_code: null, timed_out: true, stderr: '', stdout: lastText };
     const body = JSON.stringify({ model, messages, tools, tool_choice: 'auto', stream: false, temperature: 0, max_tokens: 4096 });
     const madeAt = new Date().toISOString();
-    // A transient failure (a reset connection, a 429, a 5xx) is retried with the same bytes; anything else stops the run.
-    let res = null;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try { res = await providerFetch('/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body }); } catch (e) { res = { status: 0, text: String(e?.cause?.code ?? e?.message ?? e) }; }
-      if (res.status === 200) break;
-      if (res.status !== 0 && res.status !== 429 && res.status < 500) throw new Error(`model call failed: ${res.status} ${res.text.slice(0, 300)}`);
-      if (attempt === 4) throw new Error(`model call failed after ${attempt} attempts: ${res.status} ${res.text.slice(0, 300)}`);
-      console.log(`    model call: ${res.status || 'network'} ${res.text.slice(0, 80)}; retrying (${attempt}/3)`);
-      await pause(3000 * attempt);
-    }
+    const res = await providerFetch('/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+    if (res.status !== 200) throw new Error(`model call failed: ${res.status} ${res.text.slice(0, 300)}`);
     const requestDigest = sha256(body), responseDigest = sha256(res.text);
     const resp = JSON.parse(res.text);
     const sig = await fetchSignature(resp.id, model);
