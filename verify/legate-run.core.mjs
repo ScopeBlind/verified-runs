@@ -5884,11 +5884,13 @@ function verifyModelAttestation(value, expect = {}, now = /* @__PURE__ */ new Da
   let compose = null;
   const info = isRecord4(report.info) ? report.info : null;
   const composeText = info ? str3(info.compose_file) ?? str3(info.docker_compose) ?? str3(info.compose) ?? null : null;
-  if (composeText && m) {
-    const digest = bytesToHex2(sha2562(utf82(composeText)));
-    const matched = m.mr_config_id.startsWith(digest) ? "mr_config_id" : "none";
+  const statedHash = info ? str3(info.compose_hash) ?? null : null;
+  const digest = composeText ? bytesToHex2(sha2562(utf82(composeText))) : statedHash && /^[0-9a-f]{64}$/i.test(statedHash) ? statedHash.toLowerCase() : null;
+  if (digest && m) {
+    const matched = m.mr_config_id.startsWith(`01${digest}`) || m.mr_config_id.startsWith(digest) ? "mr_config_id" : "none";
     compose = { digest, matched };
-    checks.push({ id: "compose", label: "Container", ok: true, informational: true, detail: matched === "mr_config_id" ? `The compose manifest the report carries hashes to the measured MRCONFIGID (${digest.slice(0, 16)}...): the container configuration is the measured one.` : `The compose manifest the report carries (sha256 ${digest.slice(0, 16)}...) is not the MRCONFIGID measurement; how this provider measures its configuration is not checked here.` });
+    const ok = matched === "mr_config_id";
+    checks.push({ id: "compose", label: "Container", ok, informational: !ok && !statedHash, detail: ok ? `The compose hash the report states (${digest.slice(0, 16)}...) is the measured MRCONFIGID: the container configuration the provider names is the one the hardware measured. The compose file itself is not in the report.` : `The compose hash the report states (${digest.slice(0, 16)}...) is not the measured MRCONFIGID (${m.mr_config_id.slice(0, 18)}...).` });
   }
   if (report.nvidia_payload) {
     let nonceMatches = null;

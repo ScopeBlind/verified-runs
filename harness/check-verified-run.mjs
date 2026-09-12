@@ -107,7 +107,8 @@ for (const dir of sampleDirs) {
     ok('a run with an attested model route carries its signed model calls and its attestation reports', !!manifest.environment.model_attestation && !!manifest.model_calls && existsSync(modelCallsPath) && existsSync(join(dir, 'model-attestation.json')));
     const modelCalls = readFileSync(modelCallsPath, 'utf8');
     const modelAttestations = JSON.parse(readFileSync(join(dir, 'model-attestation.json'), 'utf8'));
-    const av = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade, modelCalls, modelAttestations }, NOW);
+    const regradeHere = existsSync(join(dir, 'regrade.json')) ? JSON.parse(readFileSync(join(dir, 'regrade.json'), 'utf8')) : null; // the second grading is read again here: this section runs before the regrade section declares it
+    const av = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade: regradeHere, modelCalls, modelAttestations }, NOW);
     const failed = av.checks.filter((c) => (c.id.startsWith('model_') || c.id === 'model_route') && !c.ok).map((c) => `${c.id}: ${c.detail}`);
     ok(`every model call (${manifest.model_calls?.count ?? 0}) was signed inside the model's TEE and every attestation report (${modelAttestations.length}) verifies offline to Intel's root${failed.length ? `: ${failed.join('; ')}` : ''}`, failed.length === 0 && av.checks.some((c) => c.id === 'model_calls_bind' && c.ok && !c.informational));
     ok('the standard names the attested provider and model the manifest carries', standard.requirements.run?.model_attestation?.model === manifest.environment.model_attestation?.model && av.checks.some((c) => c.id === 'model_attestation_pin' && c.ok));
