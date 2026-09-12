@@ -73,8 +73,6 @@ jobs:
           # second grading below (and anyone else) can rebuild the workspaces. Hold them by running the harness
           # on your own machine with --no-disclose-calls --no-disclose-workspace.
           node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run" --disclose-calls --disclose-workspace
-      - name: Check the run as a reader would
-        run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl" --calls "$RUNNER_TEMP/verified-run/calls.jsonl"
       - name: Attest provenance of the manifest, the receipt chain, and the standard
         uses: actions/attest-build-provenance@v2
         with:
@@ -97,6 +95,9 @@ jobs:
         with:
           name: verified-run
           path: ${{ runner.temp }}/verified-run
+      # After the evidence is kept: a failing reader leaves the run to be diagnosed, not lost.
+      - name: Check the run as a reader would (published verifier)
+        run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl" --calls "$RUNNER_TEMP/verified-run/calls.jsonl"
 
   # A second grading in a separate job: the archived workspaces are rebuilt, the pinned tests are obtained
   # again and checked against the pin, pytest runs again, and the verdicts are signed under the grader key.

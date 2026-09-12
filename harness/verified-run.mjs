@@ -206,7 +206,7 @@ const AGENTS = {
     model_route: `${providerHost} (attested TDX inference)`,
     model_attestation: { provider: 'near-ai-cloud', model: flag('--model', 'Qwen/Qwen3.8-27B') },
     allowed_tools: flag('--allowed-tools', 'Bash').split(','),
-    sandbox: hasBwrap() ? 'Linux bubblewrap for tool commands (network disabled); the harness makes the model calls over TLS to the attested provider' : 'No sandbox for tool commands (they run on the harness host); the harness makes the model calls over TLS to the attested provider',
+    sandbox: hasBwrap() ? 'Linux bubblewrap for tool commands (network disabled); the harness makes the model calls over TLS to the attested provider' : hasSeatbelt() ? 'macOS Seatbelt for tool commands (network disabled, writes limited to the workspace); the harness makes the model calls over TLS to the attested provider' : 'No sandbox for tool commands (they run on the harness host); the harness makes the model calls over TLS to the attested provider',
     egress: [providerHost],
     version: () => 'legate-attested-loop 1.0',
     hooks() { return null; },
@@ -218,6 +218,9 @@ if (!agent) { console.error(`unknown agent ${agentName}; one of ${Object.keys(AG
 const apiKey = process.env.NEARAI_CLOUD_API_KEY ?? '';
 if (agent.model_attestation && !apiKey) { console.error('the attested agent needs NEARAI_CLOUD_API_KEY (an API key for the attested inference provider)'); process.exit(1); }
 function hasBwrap() { return process.platform === 'linux' && spawnSync('bwrap', ['--version'], { encoding: 'utf8' }).status === 0; }
+function hasSeatbelt() { return process.platform === 'darwin' && spawnSync('sandbox-exec', ['-p', '(version 1)(allow default)', 'true'], { encoding: 'utf8' }).status === 0; }
+// The Seatbelt profile the attested loop's tool commands run under on macOS: no network, writes only inside the workspace and the temp roots.
+const seatbeltProfile = (ws) => `(version 1)(allow default)(deny network*)(deny file-write*)(allow file-write* (subpath ${JSON.stringify(ws)}) (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))`;
 
 // ── Attested inference: the model's TEE signs every call, and its report binds the key to hardware ─────────
 const modelCallRecords = [];      // what is published: digests and signatures, one per call
@@ -270,6 +273,7 @@ async function attestedLoop(ws, instruction, model, limitSeconds, ctx) {
   const tools = [{ type: 'function', function: { name: 'Bash', description: 'Run a shell command in the task workspace and return its exit status and output.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'The command to run with bash -lc' } }, required: ['command'] } } }];
   const cmdEnv = { ...process.env }; for (const k of ['NEARAI_CLOUD_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'SEALED_TASKS_KEY', 'GH_TOKEN', 'GITHUB_TOKEN']) delete cmdEnv[k];
   const bwrap = hasBwrap();
+  const seatbelt = !bwrap && hasSeatbelt();
   let lastText = '';
   for (let turn = 0; turn < 40; turn++) {
     if (Date.now() > deadline) return { exit_code: null, timed_out: true, stderr: '', stdout: lastText };
@@ -304,7 +308,8 @@ async function attestedLoop(ws, instruction, model, limitSeconds, ctx) {
       if (gate.status === 2) result = `Refused by the gate: ${(gate.stderr || '').trim().slice(0, 500)}`;
       else if (gate.status !== 0) throw new Error(`the gate hook failed (exit ${gate.status}): ${(gate.stderr || '').slice(0, 300)}`);
       else {
-        const argv = bwrap ? ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--bind', ws, ws, '--unshare-net', '--die-with-parent', '--chdir', ws, 'bash', '-lc', toolInput.command] : ['bash', '-lc', toolInput.command];
+        const argv = bwrap ? ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--bind', ws, ws, '--unshare-net', '--die-with-parent', '--chdir', ws, 'bash', '-lc', toolInput.command]
+          : seatbelt ? ['sandbox-exec', '-p', seatbeltProfile(ws), 'bash', '-lc', toolInput.command] : ['bash', '-lc', toolInput.command];
         const r = spawnSync(argv[0], argv.slice(1), { cwd: ws, encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024, env: cmdEnv });
         result = `exit ${r.status === null ? 'timeout' : r.status}\n${(r.stdout ?? '').slice(0, 10_000)}${r.stderr ? `\nstderr:\n${r.stderr.slice(0, 2_000)}` : ''}`;
       }
