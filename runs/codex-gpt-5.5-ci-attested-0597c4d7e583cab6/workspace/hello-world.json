@@ -1,0 +1,14 @@
+{
+  "type": "legate.workspace_archive.v1",
+  "task_id": "hello-world",
+  "attempt": 1,
+  "digest": "sha256:213ef636d20e8bfa623b85f88e0e037e14ffae0dff2f2269da549a2bf5c710d1",
+  "files": [
+    {
+      "path": "hello.txt",
+      "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5",
+      "size": 14,
+      "content": "SGVsbG8sIHdvcmxkIQo="
+    }
+  ]
+}

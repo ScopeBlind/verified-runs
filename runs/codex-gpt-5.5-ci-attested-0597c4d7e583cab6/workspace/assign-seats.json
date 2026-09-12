@@ -1,0 +1,14 @@
+{
+  "type": "legate.workspace_archive.v1",
+  "task_id": "assign-seats",
+  "attempt": 1,
+  "digest": "sha256:e2cacc100990df513198f6ebe756674c16a2d0742bcb64dd102aee651755037d",
+  "files": [
+    {
+      "path": "results.txt",
+      "sha256": "c913e4648d7bb16b9f5418fb1476cfde69df5aceedf58bad3c8801baf7185afe",
+      "size": 24,
+      "content": "QWxpY2UsIEJvYgpBbGljZSwgRXRoYW4K"
+    }
+  ]
+}
