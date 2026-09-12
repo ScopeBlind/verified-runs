@@ -1,0 +1,72 @@
+{
+  "type": "scopeblind.run_regrade.v1",
+  "version": 1,
+  "run_id": "run:ac952151a1c59a40",
+  "manifest_digest": "17c0e818bfed9973ae69be46253619e52920a7ed05f49e1990b2fa5fa2aac648",
+  "grader": {
+    "name": "ScopeBlind verified-runs grader",
+    "key_id": "harness:c9f76087922bdbbb",
+    "verification_key": "df5226e53373611b20f0ffa5dcff1495b8126d237ccd58821b411ec0f1bfe45f"
+  },
+  "environment": {
+    "sandbox": "GitHub Actions runner (linux), separate job",
+    "note": "Second grading in https://github.com/ScopeBlind/verified-runs/actions/runs/34682012429; the tests were obtained from the benchmark repository at the pinned commit and checked against the pin."
+  },
+  "results": [
+    {
+      "task_id": "hello-world",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:1e5e5286d813863f4572b2e16a3c3fc402f08c9155f1b1062cb6518e7eebeb67"
+      },
+      "workspace_digest": "sha256:7b6a3d9729f90623318d55dfb3a3e0b8920a2291572176154f4e16fb0302ce03"
+    },
+    {
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:36e52675f028ee34bf3bcda3e5e6f71cbd79e4747ec567f5fc0da3fd6aa8cf00"
+      },
+      "workspace_digest": "sha256:ac41bacc6a4ba9d90f815cbfdea40a5e64d1de832a9f60249bf72fc6fd4db273"
+    },
+    {
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 1,
+        "failed": 0,
+        "output_digest": "sha256:d6de475e8ae92ac8cd1a6809adb5f20f497637a344ecff736f572e4d48cb0c46"
+      },
+      "workspace_digest": "sha256:c212c6a3e03cbe0b234dc6ebd8092df98f932bee7662983cd6ba8e106bbf4074"
+    },
+    {
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:62719df620c8aaede9983b47ea2845593599945369194d6bf05b5344ef1ffa64"
+      },
+      "workspace_digest": "sha256:e2cacc100990df513198f6ebe756674c16a2d0742bcb64dd102aee651755037d"
+    }
+  ],
+  "regraded_at": "2026-09-12T08:02:26.159Z",
+  "nonce": "575c05a38e2283daa3ba38496ff8fb7b",
+  "digest": "f9090f5fc5382534c00162fff5c1a36f64a5d031006f384d2b8b91760df88fbe",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "719bb43a462de7c3fdf1c7b716149d6a263fedba6fc9ff39e01a3d6ae37ea73cf3483ad931d9545a022f9451d27d61e567959bd2683480e1170879551c6a240c"
+  }
+}

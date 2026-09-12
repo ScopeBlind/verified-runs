@@ -1,0 +1,14 @@
+{
+  "type": "legate.workspace_archive.v1",
+  "task_id": "countdown-game",
+  "attempt": 1,
+  "digest": "sha256:ac41bacc6a4ba9d90f815cbfdea40a5e64d1de832a9f60249bf72fc6fd4db273",
+  "files": [
+    {
+      "path": "output.txt",
+      "sha256": "35e58779c5a5bbcb1047ddace02980faa0102fef86cf705c4121eb68b4bcab54",
+      "size": 19,
+      "content": "MTEgKiAoNzUgLSAyNSAtIDgpCg=="
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "kid": "sb:issuer:CuhL1CedXFHf",
+  "public_key": "b0f05b5c401a68b4e19151aae2929ee4c923f9960f20cf18ab0198c6c8218cc0",
+  "note": "Ephemeral gateway key: generated inside this run, written only to the runner's temporary directory for the gate process, and discarded with it. Real signatures; the provenance binds the manifest that names it to the workflow run."
+}

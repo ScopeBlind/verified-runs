@@ -1,0 +1,216 @@
+{
+  "type": "scopeblind.run_manifest.v1",
+  "version": 1,
+  "run_id": "run:ac952151a1c59a40",
+  "standard": {
+    "request_id": "pr:7a1e5b9c3d2f4e60",
+    "digest": "905060cd153673fae85a046fd366bf0137e4068b9f17f1466c081eeb6dd7fd9f",
+    "recipient_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f",
+    "policy_digest": "sha256:b88a9487c62dbb63db713fecd6b39ceeddba3e54b05dbfb332de26394688374f"
+  },
+  "agent": {
+    "name": "legate-attested-loop",
+    "version": "legate-attested-loop 1.0",
+    "model": "Qwen/Qwen3.8-27B",
+    "model_route": "cloud-api.near.ai (attested TDX inference)"
+  },
+  "harness": {
+    "name": "legate-verified-run",
+    "digest": "sha256:a35496d6f317d418d365b57bff9d96d0a5d21a567c371de565292e25d0715e09",
+    "gateway": "protect-mcp 0.13.3"
+  },
+  "dataset": {
+    "name": "terminal-bench/original-tasks",
+    "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+    "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c",
+    "task_count": 4
+  },
+  "environment": {
+    "sandbox": "Linux bubblewrap for tool commands (network disabled); the harness makes the model calls over TLS to the attested provider",
+    "egress": [
+      "cloud-api.near.ai"
+    ],
+    "model_attestation": {
+      "provider": "near-ai-cloud",
+      "model": "Qwen/Qwen3.8-27B",
+      "reports": [
+        {
+          "digest": "sha256:6a066201869850d07f8e06b336dc8e21f762763759e7930aae16ae3ba56c285a",
+          "signing_address": "0xdae35b28350786f88afe07019aee6cef513886a8"
+        }
+      ]
+    },
+    "attestation": {
+      "kind": "github-actions-provenance",
+      "reference": "https://github.com/ScopeBlind/verified-runs/actions/runs/34682012429",
+      "digest": "sha256:8f530fb4f51c070dbe079c6f1880175e09d5788815f4faf636213bcb65ee3f43",
+      "commit": "99fcf64ea816191d2613c70de07881288854c451",
+      "workflow": "ScopeBlind/verified-runs/.github/workflows/verified-run.yml@refs/heads/main"
+    },
+    "note": "Run in GitHub Actions (https://github.com/ScopeBlind/verified-runs/actions/runs/34682012429); the provenance attestations for manifest.json, receipts.jsonl, standard.json, and the second grading are on that run and kept beside it under provenance/, where the verifier consumes them. Task paths were rebased from /app to a workspace and the tests were run with the same rebase."
+  },
+  "gateway": {
+    "key_id": "sb:issuer:CuhL1CedXFHf",
+    "verification_key": "b0f05b5c401a68b4e19151aae2929ee4c923f9960f20cf18ab0198c6c8218cc0",
+    "receipt_count": 23,
+    "chain_head": "sha256:40e725602e918456faf3e9b116c270b28c364d7dbfed3abf5290174145369da4",
+    "log_digest": "sha256:7adfc35fcbe1a47eef8cd6959104d87535f02f50553365c942df19b3b2267596",
+    "calls_digest": "sha256:be6c85b08d9ac1b8fcadf6c1d74224a8649d6a15e004450c4529a0054addab03",
+    "calls_disclosed": true
+  },
+  "model_calls": {
+    "digest": "sha256:42b1b775fd0d7c8a3710a6933c08b34ea165bf5e0426a57bca32ae5d87a00bd3",
+    "count": 22,
+    "disclosed": true
+  },
+  "attempts": [
+    {
+      "model_calls": {
+        "from": 0,
+        "to": 2
+      },
+      "task_id": "hello-world",
+      "attempt": 1,
+      "started_at": "2026-09-12T07:57:36.756Z",
+      "ended_at": "2026-09-12T07:57:46.445Z",
+      "receipts": {
+        "from": 0,
+        "to": 1
+      },
+      "calls": 1,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:1e5e5286d813863f4572b2e16a3c3fc402f08c9155f1b1062cb6518e7eebeb67"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:7b6a3d9729f90623318d55dfb3a3e0b8920a2291572176154f4e16fb0302ce03",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 2,
+        "to": 4
+      },
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "started_at": "2026-09-12T07:57:47.182Z",
+      "ended_at": "2026-09-12T07:58:02.193Z",
+      "receipts": {
+        "from": 1,
+        "to": 2
+      },
+      "calls": 1,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:36e52675f028ee34bf3bcda3e5e6f71cbd79e4747ec567f5fc0da3fd6aa8cf00"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:ac41bacc6a4ba9d90f815cbfdea40a5e64d1de832a9f60249bf72fc6fd4db273",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 4,
+        "to": 11
+      },
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "started_at": "2026-09-12T07:58:02.663Z",
+      "ended_at": "2026-09-12T07:59:30.617Z",
+      "receipts": {
+        "from": 2,
+        "to": 12
+      },
+      "calls": 10,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 1,
+        "failed": 0,
+        "output_digest": "sha256:d6de475e8ae92ac8cd1a6809adb5f20f497637a344ecff736f572e4d48cb0c46"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:c212c6a3e03cbe0b234dc6ebd8092df98f932bee7662983cd6ba8e106bbf4074",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 11,
+        "to": 22
+      },
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "started_at": "2026-09-12T07:59:31.072Z",
+      "ended_at": "2026-09-12T08:02:01.631Z",
+      "receipts": {
+        "from": 12,
+        "to": 23
+      },
+      "calls": 11,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:62719df620c8aaede9983b47ea2845593599945369194d6bf05b5344ef1ffa64"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:e2cacc100990df513198f6ebe756674c16a2d0742bcb64dd102aee651755037d",
+        "file_count": 1,
+        "disclosed": true
+      }
+    }
+  ],
+  "summary": {
+    "tasks": 4,
+    "passed": 4,
+    "failed": 0,
+    "errored": 0,
+    "calls": 23,
+    "refused": 0
+  },
+  "signer": {
+    "name": "Legate verified-run harness (ephemeral, held by the workflow run)",
+    "key_id": "harness:194dac3cde1363e7",
+    "verification_key": "1157a47073304d85cf8c813d1366ff0704e7bd9bc2fa6b310ec56f0aeaf6079e"
+  },
+  "issued_at": "2026-09-12T08:02:02.115Z",
+  "nonce": "369303ce778afb7bf41ec77bf3ba4963",
+  "digest": "17c0e818bfed9973ae69be46253619e52920a7ed05f49e1990b2fa5fa2aac648",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "b0e926fd881a2c69b45594cd807fa8f0aa6fe6ac65fde1a2598c1f3aaa3a9c104aa4911475ce6d42a8dceff30cc63d1f00ada1b80c3b9287e9440960f734f504"
+  }
+}

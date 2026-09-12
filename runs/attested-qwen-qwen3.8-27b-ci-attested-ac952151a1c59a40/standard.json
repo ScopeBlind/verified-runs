@@ -1,0 +1,168 @@
+{
+  "type": "scopeblind.proof_request.v1",
+  "version": 1,
+  "request_id": "pr:7a1e5b9c3d2f4e60",
+  "recipient": {
+    "name": "verified-runs maintainer",
+    "organization": "ScopeBlind",
+    "key_id": "recipient:e1b6a9c5f64f7310",
+    "verification_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f"
+  },
+  "operator": {
+    "name": "ScopeBlind verified-runs workflow"
+  },
+  "decision": {
+    "kind": "reliance",
+    "owner": "ScopeBlind verified-runs maintainer",
+    "statement": "Rely on this run's score as a verified run of the pinned task set",
+    "purpose": "Leaderboard entry"
+  },
+  "boundary": {
+    "workflow": "Benchmark run",
+    "action_class": "tool_call",
+    "resources": [
+      "the task workspace"
+    ],
+    "destinations": [],
+    "period": {
+      "starts_at": "2026-09-11T00:00:00.000Z",
+      "ends_at": "2027-12-31T00:00:00.000Z"
+    }
+  },
+  "requirements": {
+    "environment_class_min": "sandbox",
+    "approver_assurance_min": "policy_automatic",
+    "human_approval": {
+      "required_above": null,
+      "distinct_approvers": 1
+    },
+    "authority_max_age_seconds": 900,
+    "coverage": "governed_route",
+    "effect_evidence": "independently_reconciled",
+    "anchoring": "self_attested",
+    "partial_settlement_permitted": false,
+    "run": {
+      "allowed_tools": [
+        "Bash"
+      ],
+      "egress_allowlist": [
+        "cloud-api.near.ai"
+      ],
+      "attempts_per_task": 1,
+      "dataset": {
+        "name": "terminal-bench/original-tasks",
+        "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+        "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c"
+      },
+      "harness": {
+        "name": "legate-verified-run",
+        "digest": "sha256:a35496d6f317d418d365b57bff9d96d0a5d21a567c371de565292e25d0715e09"
+      },
+      "time_limit_seconds": 900,
+      "model_route": "cloud-api.near.ai (attested TDX inference)",
+      "model_attestation": {
+        "provider": "near-ai-cloud",
+        "model": "Qwen/Qwen3.8-27B"
+      }
+    }
+  },
+  "trust": {
+    "accepted_gate_keys": [
+      "b0f05b5c401a68b4e19151aae2929ee4c923f9960f20cf18ab0198c6c8218cc0"
+    ],
+    "accepted_approver_keys": [],
+    "accepted_readback_sources": [
+      "1157a47073304d85cf8c813d1366ff0704e7bd9bc2fa6b310ec56f0aeaf6079e",
+      "df5226e53373611b20f0ffa5dcff1495b8126d237ccd58821b411ec0f1bfe45f"
+    ],
+    "accepted_anchor_witnesses": [],
+    "accepted_grader_provenance": [
+      {
+        "kind": "github-actions-provenance",
+        "repository": "https://github.com/ScopeBlind/verified-runs"
+      },
+      {
+        "kind": "github-actions-provenance",
+        "repository": "https://github.com/VeritasActa/verified-runs-grader"
+      }
+    ]
+  },
+  "disclosure": {
+    "required_fields": [
+      "tool calls",
+      "verdicts",
+      "chain head"
+    ],
+    "inspection": "on_request"
+  },
+  "limitations_permitted": [
+    "The agent's own sandbox stands in for the benchmark's Docker image; task paths are rebased from /app to the workspace and the tests are run with the same rebase",
+    "The gate clock is accepted as the dispatch time",
+    "No environment attestation is required for a demonstration run",
+    "Demonstration keys sign the standard, the receipts, the manifest, and the regrade; they prove the mechanism, not identity",
+    "The second grading may run in the same continuous-integration account as the first, under a distinct key and job; a grading by a third party is stronger and the archived workspace makes it possible"
+  ],
+  "rejection_criteria": [
+    "Any tool call not on the allowed list that the gate allowed",
+    "Any gap in the receipt chain",
+    "More than one attempt per task",
+    "Any pass the agent reports that the harness's tests do not reproduce"
+  ],
+  "hold_criteria": [
+    "A harness other than the pinned one",
+    "A run whose environment attestation is missing"
+  ],
+  "deadline": {
+    "respond_by": "2027-12-31T00:00:00.000Z",
+    "evidence_max_age_seconds": 2592000
+  },
+  "consequence": {
+    "if_met": "Listed as a verified run: the score stands on the receipts and the manifest, not on the submitter's word.",
+    "if_not_met": "Listed as unverified, or not listed. No score is taken from this submission.",
+    "not_a_promise": true
+  },
+  "claim_contract_digest": null,
+  "enforcement": {
+    "compiler": "legate-standard-compiler.v1",
+    "policy_format": "cedar",
+    "construction": "acta-policy-digest-v1",
+    "file_name": "standard.cedar",
+    "policy": "// Compiled by legate-standard-compiler.v1 from the signed standard's structured requirements.\n// The standard carries this file's digest (acta-policy-digest-v1). Edit the standard, not this file.\n// Allowed tools: Bash. The name must match exactly. The gate does not read the tool's input.\n// Network, model route, attempts, time, and the task set are not visible here; the environment enforces the first two and the manifest carries the rest.\n\npermit (\n  principal,\n  action == Action::\"MCP::Tool::call\",\n  resource\n) when {\n  resource in [Tool::\"Bash\"]\n};\n\nforbid (\n  principal,\n  action == Action::\"MCP::Tool::call\",\n  resource\n) unless {\n  resource in [Tool::\"Bash\"]\n};\n",
+    "policy_digest": "sha256:b88a9487c62dbb63db713fecd6b39ceeddba3e54b05dbfb332de26394688374f",
+    "action_model": "mcp",
+    "tool": "Bash",
+    "gate_enforced": [
+      "run_tools"
+    ],
+    "not_gate_enforced": [
+      "run_egress",
+      "run_model_route",
+      "run_model_attestation",
+      "run_attempts",
+      "run_time_limit",
+      "run_dataset",
+      "run_harness",
+      "limit_amount",
+      "environment",
+      "coverage",
+      "effect",
+      "anchoring",
+      "disclosure",
+      "payment_controls",
+      "rejection_0_tool_not_listed",
+      "rejection_1_chain_intact",
+      "rejection_2_attempts",
+      "rejection_3_harness_verdict",
+      "hold_0_run_pins",
+      "hold_1"
+    ]
+  },
+  "issued_at": "2026-09-11T00:00:00.000Z",
+  "expires_at": "2027-12-31T00:00:00.000Z",
+  "nonce": "c0ffee00c0ffee00c0ffee00c0ffee02",
+  "digest": "905060cd153673fae85a046fd366bf0137e4068b9f17f1466c081eeb6dd7fd9f",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "00cb5a61db5b1e86deacbbd16a22dd2f70f8222bdfef441da29c3a9461a8bdff20e3160cff04c2ed0155bf36ff13fc4033d43760920559a3e9fc3581ee0d070e"
+  }
+}
