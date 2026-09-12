@@ -1,6 +1,59 @@
 # Verified runs
 
-A benchmark score is a claim by whoever ran it. A verified run is the same score with the evidence attached, in three files anyone can check offline with no account:
+A benchmark score is a claim by whoever ran it. A verified run is the same score with the evidence attached: files anyone can check offline, with no account and no trust in us.
+
+**The latest run**, [`runs/attested-qwen-qwen3.8-27b-ci-attested-ac952151a1c59a40`](runs/attested-qwen-qwen3.8-27b-ci-attested-ac952151a1c59a40): Qwen 3.8 27B on four public Terminal-Bench tasks, 4 of 4 passed. Every tool call went through the gateway under a signed standard and left a receipt. The model answered inside a confidential machine that signed every call, and that machine's attestation verifies against Intel's root. The result was graded three times: by the harness, by a separate job, and by [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), another organization's workflow. GitHub attests which code produced each file. [See it checked in a browser](https://legate.scopeblind.com/verify?sample=run), or check it yourself:
+
+```bash
+cd runs/attested-qwen-qwen3.8-27b-ci-attested-ac952151a1c59a40
+npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl --calls calls.jsonl \
+  --regrade regrade.json --regrade regrades/veritasacta-verified-runs-grader/regrade.json \
+  --provenance provenance --provenance regrades/veritasacta-verified-runs-grader \
+  --model-calls model-calls.jsonl --model-attestation model-attestation.json
+```
+
+The verifier prints what the files establish and what they do not, check by check. `gh attestation verify manifest.json --owner scopeblind` is an independent path to the provenance. Drop the same files together on [legate.scopeblind.com/verify](https://legate.scopeblind.com/verify) for the same answer in a browser.
+
+## What a stranger can check
+
+| Question | Answered by | How it is checked |
+|---|---|---|
+| What was the agent allowed to do? | `standard.json`, signed by the maintainer | The tool list, the network rule, the attempts and time limit, the pinned task set and harness, and the Cedar policy compiled from them. |
+| What did it actually do? | `receipts.jsonl`, signed by the gateway; `calls.jsonl` | One receipt per tool call, allowed or refused, hash-chained, each citing the policy digest and the digest of the call's input; the calls log opens each one to the command it was. |
+| Did it pass? | `manifest.json`, signed by the harness; `regrade.json`; `regrades/<grader>/` | The harness ran each task's own tests, not the agent's word. A second grading re-ran the pinned tests on the archived workspace in a separate job; a third came from another organization's workflow, accepted by the provenance that names it. The verifier requires every grading supplied to agree. |
+| Which model answered? | `model-calls.jsonl`, `model-attestation.json` | Every call signed inside the provider's confidential machine; the Intel TDX quote that binds the signing key verified offline against the pinned Intel root. |
+| Was it made the way it says? | `provenance/*.sigstore.jsonl` | GitHub's build provenance for each file, verified offline against the pinned Sigstore trust root: workflow, repository, commit, run, and transparency-log entry. |
+| Whose keys? | `maintainer-key.json`, `grader-key.json` | Published here and on [legate.scopeblind.com/trust](https://legate.scopeblind.com/trust). Gateway and harness keys are generated inside each workflow run and discarded with it; the provenance binds them. |
+
+## The runs
+
+| Run | Agent, model | Passed | Graded by | Keys | Made in |
+|---|---|---|---|---|---|
+| [codex-gpt-5.5-ci-acdc37bdee606700](runs/codex-gpt-5.5-ci-attested-acdc37bdee606700) | codex-cli, gpt-5.5 | 3 of 4 | the harness, a separate job | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34664927913) |
+| [codex-gpt-5.5-ci-84da2e701aa10825](runs/codex-gpt-5.5-ci-attested-84da2e701aa10825) | codex-cli, gpt-5.5 | 4 of 4 | the harness, a separate job | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34667881546) |
+| [codex-gpt-5.5-ci-3ba539cf9863f7b8](runs/codex-gpt-5.5-ci-attested-3ba539cf9863f7b8) | codex-cli, gpt-5.5 | 4 of 4 | the harness | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34597720550) |
+| [codex-gpt-5.5-ci-0597c4d7e583cab6](runs/codex-gpt-5.5-ci-attested-0597c4d7e583cab6) | codex-cli, gpt-5.5 | 4 of 4 | the harness, a separate job | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34669544351) |
+| [codex-gpt-5.5-1c3d2cc199a86f2a](runs/codex-gpt-5.5-1c3d2cc199a86f2a) | codex-cli, gpt-5.5 | 4 of 4 | the harness | demonstration | a laptop |
+| [claude-code-sonnet-5-eade3f9c533d9be4](runs/claude-code-sonnet-5-eade3f9c533d9be4) | claude-code, claude-sonnet-5 | 4 of 4 | the harness | demonstration | a laptop |
+| [claude-code-sonnet-5-ci-bab08b93c9611d20…](runs/claude-code-sonnet-5-ci-attested-bab08b93c9611d20) | claude-code, claude-sonnet-5 | 4 of 4 | the harness | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34606014128) |
+| [claude-code-sonnet-5-ci-6e8535914100e45c…](runs/claude-code-sonnet-5-ci-attested-6e8535914100e45c) | claude-code, claude-sonnet-5 | 4 of 4 | the harness, a separate job | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34664929869) |
+| [attested-qwen-qwen3.8-27b-ci-ac952151a1c59a4…](runs/attested-qwen-qwen3.8-27b-ci-attested-ac952151a1c59a40) | attested-loop, Qwen/Qwen3.8-27B (attested) | 4 of 4 | the harness, a separate job, VeritasActa | published | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34682012429) |
+| [attested-qwen-qwen3.8-27b-ci-00856fa42e6ae29…](runs/attested-qwen-qwen3.8-27b-ci-attested-00856fa42e6ae290) | attested-loop, Qwen/Qwen3.8-27B (attested) | 2 of 4 | the harness, a separate job | demonstration | [CI](https://github.com/ScopeBlind/verified-runs/actions/runs/34678858933) |
+
+Every tool call in every run went through [protect-mcp](https://github.com/scopeblind/scopeblind-gateway) under a policy compiled from the maintainer's signed standard, and the harness, not the agent, ran each task's own tests. Each run folder has a README listing its files and what they do not establish.
+
+## Making one
+
+Dispatch the workflow (`verified-run.yml`: agent `codex`, `claude`, or `attested`; a task list or a sealed set; the model), or run the harness on a machine of your own:
+
+```bash
+node harness/verified-run.mjs --agent attested --model Qwen/Qwen3.8-27B --tasks hello-world,countdown-game --out runs/my-run
+node harness/regrade.mjs --run runs/my-run --sign
+```
+
+A run made on a laptop says so in its manifest and carries no provenance; a run made by the workflow carries the attestation bundles beside it. To grade someone else's run from outside their repository, fork [the grader](https://github.com/VeritasActa/verified-runs-grader).
+
+## The files, in detail
 
 | File | Who signs it | What it says |
 |---|---|---|
@@ -8,38 +61,17 @@ A benchmark score is a claim by whoever ran it. A verified run is the same score
 | `receipts.jsonl` | The gateway | One signed receipt per attempted tool call, allowed or refused, each linked to the previous by hash, each citing the policy digest, each carrying the digest of the call's input. |
 | `manifest.json` | The harness | The pins, every attempt with the receipts it produced and the harness's own test verdict, the chain head, the agent and model, the environment, the digest of the calls log and of what the agent left in each task directory, and the provenance attestation when there is one. |
 
-Beside them, when the maintainer publishes them: `calls.jsonl`, the call behind every receipt (tool and input), bound by the input digest each receipt carries; `workspace/`, what the agent left in each task directory, pinned by digest; `tests/`, the harness's own test output, digested by the manifest; and `regrade.json`, a second grading of the run made by re-running the pinned tests on the archived workspace, signed under a distinct grader key the standard accepts. On a sealed task set the calls and the workspaces are held by the maintainer, and their digests in the manifest still bind them.
+Beside them, when the maintainer publishes them: `calls.jsonl`, the call behind every receipt (tool and input), bound by the input digest each receipt carries; `workspace/`, what the agent left in each task directory, pinned by digest; `tests/`, the harness's own test output, digested by the manifest; `regrade.json`, a second grading of the run made by re-running the pinned tests on the archived workspace, signed under a distinct grader key the standard accepts; and `regrades/<grader>/`, gradings made elsewhere, each with the provenance bundle naming its exact bytes. On a sealed task set the calls and the workspaces are held by the maintainer, and their digests in the manifest still bind them.
 
-A grading made elsewhere sits under `regrades/<grader>/` beside the run: `regrade.json`, and `regrade.json.sigstore.jsonl`, the provenance bundle naming its exact bytes. The standard accepts such a grader by the identity in that bundle (`trust.accepted_grader_provenance`: a repository whose workflow made the grading), not by a key listed in advance, so the grader's key can be one its workflow run generated and discarded. The first such grader is [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), a separate repository under a separate organization with its own workflow, its own runner, and its own key; a reader checks any grading with `--regrade` given twice, the run's own first.
+The verifier reports `bound` when the manifest names that standard by digest, the receipts are the ones the manifest names (count and chain head), every receipt cites the policy compiled from the standard, every allowed call names a tool on the standard's list, no task exceeded the allowed attempts or time, the task-set and harness pins match, and the gateway and harness keys are ones the standard accepts. For a run made by the workflow, the provenance bundles under `provenance/` are consumed by the verifier (`harness/check-verified-run.mjs`, and `@veritasacta/verify --provenance`): each is checked offline against the pinned Sigstore trust root and tied to the exact bytes of the files given.
 
-Every tool call the agent made went through [protect-mcp](https://github.com/scopeblind/scopeblind-gateway) under a policy compiled from the maintainer's signed standard, and the harness, not the agent, ran each task's own tests.
+### Keys
 
-## Verify a run
+Runs made by the workflow use no demonstration keys. The maintainer key that signs each run's standard and the grader key that signs each second grading are persistent, held as repository secrets (`LEGATE_MAINTAINER_SEED`, `LEGATE_GRADER_SEED`) that never leave the workflow, and their verification keys are published here: [`maintainer-key.json`](maintainer-key.json) and [`grader-key.json`](grader-key.json). Pin them through a channel you trust: this repository, or the trust page. The gateway key and the harness key are generated inside each workflow run and discarded with it; the provenance binds the manifest that names them. A grading made elsewhere is accepted by the identity in its provenance bundle (`trust.accepted_grader_provenance`), not by a key listed in advance.
 
-```bash
-cd runs/<run>
-npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl
-```
+### An attested model route
 
-The verifier reports `bound` when the manifest names that standard by digest, the receipts are the ones the manifest names (count and chain head), every receipt cites the policy compiled from the standard, every allowed call names a tool on the standard's list, no task exceeded the allowed attempts or time, the task-set and harness pins match, and the gateway and harness keys are ones the standard accepts. Or drop the manifest on [legate.scopeblind.com/verify](https://legate.scopeblind.com/verify) and add the other two files.
-
-For a run made by the workflow in this repository, GitHub's build provenance covers the manifest, the receipt chain, the standard, and the second grading, and the bundles are kept beside the run under `provenance/`. The verifier consumes them: `harness/check-verified-run.mjs` (and `@veritasacta/verify --provenance runs/<run>/provenance`, from 0.10.5) checks each bundle offline against the pinned Sigstore public-good trust root: the certificate chain to Fulcio, the workflow identity in the certificate (issuer, workflow, repository, commit, run) against what the manifest names, the DSSE signature, the Rekor entry and its signed timestamp, the inclusion proof and signed checkpoint, and the certificate-transparency SCT; then each file's exact bytes must be a subject of a verified bundle. Where the attested commit is in this repository's history, the check also confirms that the harness pair the manifest pins is the pair the repository held at that commit. GitHub's own verifier remains an independent path:
-
-```bash
-gh attestation verify runs/<run>/manifest.json --owner scopeblind
-```
-
-## Keys
-
-A run made by the workflow no longer uses demonstration keys. The maintainer key that signs each run's standard and the grader key that signs each second grading are persistent, held as repository secrets (`LEGATE_MAINTAINER_SEED`, `LEGATE_GRADER_SEED`) that never leave the workflow, and their verification keys are published here: [`maintainer-key.json`](maintainer-key.json) and [`grader-key.json`](grader-key.json). Pin them through a channel you trust; the verifier says so. The gateway key and the harness key are ephemeral: generated inside each run, held only by that run's processes, and discarded with it; the standard names them, the manifest carries them, and the run's provenance binds that manifest to the workflow run whose code shows how they were made. A run made on a developer machine still uses the demonstration keys and says so.
-
-## An attested model route
-
-A run made with `--agent attested` names its model with evidence instead of a declaration. The agent is a minimal loop on an inference provider that runs the model in a confidential virtual machine and signs, inside it, the digest of every request and response (NEAR AI Cloud's shape). The run carries `model-calls.jsonl` (one signed record per call), `model-attestation.json` (the provider's report for each signing key: an Intel TDX quote whose report_data binds the key), and `model-calls-bodies.jsonl` (the bytes, published or held). The verifier checks each signature, verifies each quote offline to the Intel SGX Root CA it pins (quote signature, quoting-enclave binding and signature, PCK chain, validity), checks the key binding and the nonce in report_data, and holds every call to the model the standard names. Not established: the platform's current TCB status, the GPU verdict (NVIDIA's online service; its evidence is kept beside the report), and what the model did with the bytes beyond signing them. `harness/check-verified-run.mjs` also proves the primitives on every push against a real sample quote (`harness/fixtures/`, from the dcap-qvl project, MIT) and the provider's documented signature vector.
-
-```bash
-NEARAI_CLOUD_API_KEY=... node harness/verified-run.mjs --agent attested --model Qwen/Qwen3.8-27B --tasks hello-world,countdown-game --out runs/my-run
-```
+A run made with `--agent attested` names its model with evidence instead of a declaration. The agent is a minimal loop on an inference provider that runs the model in a confidential virtual machine and signs, inside it, the digest of every request and response (NEAR AI Cloud's shape). The run carries `model-calls.jsonl` (one signed record per call), `model-attestation.json` (the provider's report for each signing key, with the Intel TDX quote), and `model-calls-bodies.jsonl` (the bytes, published or held). The verifier recovers each call's signer, checks that a verified report binds it, and checks that the attested model is the one the standard names. Not verified here: the platform's current TCB status and the GPU verdict, which need the vendors' current collateral.
 
 ## What the chain establishes, exactly
 
@@ -47,7 +79,7 @@ Removing a receipt from the front leaves the next one pointing at a predecessor 
 
 ## What a run does not establish
 
-- Who holds the maintainer, gateway, and harness keys. The runs here use demonstration keys whose seeds are in the open source; they prove the mechanism, not identity. A maintainer supplies real keys by signing the standard and naming the gateway and harness keys it accepts.
+- Who holds the keys. Runs made by the workflow since 12 September 2026 carry a standard signed by the published maintainer key and a second grading by the published grader key (`maintainer-key.json`, `grader-key.json`, also on [legate.scopeblind.com/trust](https://legate.scopeblind.com/trust)); their gateway and harness keys were generated inside the workflow run and discarded with it, and the provenance binds them. Earlier runs use demonstration keys whose seeds are in the open source, and say so; they prove the mechanism, not identity.
 - That the sandbox enforced the network rule. The gateway sees tool calls, not packets. A run made by the workflow carries a provenance attestation that the verifier checks against the pinned Sigstore trust root, so the workflow, the commit, and the run that produced these bytes are established, and what that workflow configured is in the repository at that commit; a run made on a laptop says so and carries none.
 - Anything the agent said or reasoned. The receipts record calls, the harness records verdicts, and the transcript stays with the submitter.
 - That the model was never trained on the tasks. A verified run proves process integrity, not the absence of contamination. Sealed task sets (below) are how a maintainer keeps a held-out set held out while still letting anyone verify a run against it.

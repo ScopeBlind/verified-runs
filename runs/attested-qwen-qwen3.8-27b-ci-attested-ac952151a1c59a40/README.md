@@ -1,6 +1,6 @@
 # A verified run
 
-One agent (legate-attested-loop legate-attested-loop 1.0, model Qwen/Qwen3.8-27B) ran 4 tasks from terminal-bench/original-tasks at d28711d0, every tool call through protect-mcp 0.13.3 under the policy compiled from the signed standard. Produced by verified-run.mjs on 2026-09-12; verified as committed by check-verified-run.mjs on every build. Demonstration keys sign the standard, the receipts, and the manifest: they prove the mechanism, not identity.
+One agent (legate-attested-loop legate-attested-loop 1.0, model Qwen/Qwen3.8-27B) ran 4 tasks from terminal-bench/original-tasks at d28711d0, every tool call through protect-mcp 0.13.3 under the policy compiled from the signed standard. Produced by verified-run.mjs on 2026-09-12; verified as committed by check-verified-run.mjs on every build. The standard is signed by the maintainer key published at the repository root (maintainer-key.json), the second grading by the published grader key (grader-key.json), and the gateway and harness keys were generated inside this run and discarded with it: real signatures, published identities.
 
 | File | What it is |
 |---|---|
@@ -10,15 +10,16 @@ One agent (legate-attested-loop legate-attested-loop 1.0, model Qwen/Qwen3.8-27B
 | manifest.json | The harness's signed account: pins, every attempt with its receipts and test verdict, the chain head. |
 | task-set.json | The pinned task set: file paths and hashes at the benchmark commit, never the files. Reference solutions were never fetched. Dockerfile RUN lines, if any, are listed as not applied. |
 | harness.json | The harness pin: the digest of the harness file and the run core it runs on, as the standard names it. |
-| model-calls.jsonl | The harness, signed by the model's TEE | One record per model call: the digests of the exact request and response bytes, the TEE's signature over them, and the signing address. The manifest pins the log by digest and each attempt names its range. |
-| model-attestation.json | The inference provider | The attestation report for each signing address: an Intel TDX quote whose report_data binds the signing key, verified offline against Intel's root; the manifest pins each report by digest. |
-| model-calls-bodies.jsonl | The harness | The request and response bytes behind each record, published or held (held bodies stay with the maintainer; the digests bind them either way). |
-| provenance/ | GitHub Actions (when the run was made there) | Sigstore bundles for manifest.json, receipts.jsonl, standard.json, and regrade.json: the workflow, repository, commit, and run that produced these bytes, verified offline against the pinned Sigstore trust root by the verifier, or independently with gh attestation verify. |
+| model-calls.jsonl | Signed by the model's TEE, kept by the harness: one record per model call: the digests of the exact request and response bytes, the TEE's signature over them, and the signing address. The manifest pins the log by digest and each attempt names its range. |
+| model-attestation.json | From the inference provider: the attestation report for each signing address: an Intel TDX quote whose report_data binds the signing key, verified offline against Intel's root; the manifest pins each report by digest. |
+| model-calls-bodies.jsonl | The request and response bytes behind each record, published or held (held bodies stay with the maintainer; the digests bind them either way). |
+| provenance/ | When the run was made in GitHub Actions: Sigstore bundles for manifest.json, receipts.jsonl, standard.json, and regrade.json: the workflow, repository, commit, and run that produced these bytes, verified offline against the pinned Sigstore trust root by the verifier, or independently with gh attestation verify. |
 | oracle.json | The real engine's verdict on every counterexample the compiler emitted. |
 | tests/ | The harness's own pytest output per task; its digest is in the manifest. |
 | calls.jsonl | The call behind every receipt, in order: tool and input, bound by the input digest each receipt carries. Open it to see what each shell call did. |
 | workspace/ | What the agent left in each task directory, pinned by digest in the manifest, so anyone can re-run the pinned tests on it. |
 | regrade.json | A second grading, when made: the pinned tests re-run on the archived workspace, signed under a distinct grader key the standard accepts. `regrade.mjs` makes one. |
+| regrades/<grader>/ | Gradings made elsewhere, when adopted: each with the provenance bundle that names its bytes, accepted by the identity the standard names. Here: veritasacta-verified-runs-grader. |
 
 ## Result
 
@@ -45,6 +46,6 @@ Result: 4 of 4 passed; 23 governed calls, 0 refused
 - That the verdicts are more than the harness's word: no second grading is supplied. The archived workspace and the pinned tests let anyone make one.
 - What the agent said or reasoned: the receipts record tool calls and the harness records test verdicts, not the transcript.
 
-Verify offline: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl`, or drop the three files on legate.scopeblind.com/verify.
+Verify offline, inside this folder: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl --calls calls.jsonl --regrade regrade.json --regrade regrades/veritasacta-verified-runs-grader/regrade.json --provenance provenance --provenance regrades/veritasacta-verified-runs-grader --model-calls model-calls.jsonl --model-attestation model-attestation.json`, or drop the files together on legate.scopeblind.com/verify.
 
 Removing a receipt from the front leaves a dangling link, which the verifier reports; removing one from the end changes the head and the count the manifest pins; a chain re-signed from scratch needs the keys, which is why the standard names them and why demonstration keys prove the mechanism only. A receipt records the call the gate saw, not what the call did: open calls.jsonl for that, and the workspace archive for what was left behind. The verdicts are the harness's own test run until a second grading reconciles them.
