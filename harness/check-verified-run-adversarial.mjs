@@ -169,4 +169,18 @@ if (baseModelCalls && baseModelAttestations) {
   caught('the manifest re-signed to attest a different model', (c) => { c.manifest.environment.model_attestation.model = 'someone/else'; c.manifest = resign(c.manifest); }, /model_attestation_pin|model_calls_bind/);
   caught('a model call dropped from the log', (c) => { c.modelCalls = c.modelCalls.split('\n').filter(Boolean).slice(1).join('\n') + '\n'; }, /model_calls_digest/);
 }
+
+// Gradings made elsewhere (regrades/<grader>/), when the run has any: a flipped verdict in one of them is material.
+{
+  const extraDir = join(dir, 'regrades');
+  const extra = existsSync(extraDir) ? readdirSync(extraDir).filter((n) => existsSync(join(extraDir, n, 'regrade.json'))).sort().map((n) => ({ regrade: JSON.parse(readFileSync(join(extraDir, n, 'regrade.json'), 'utf8')), bytes: readFileSync(join(extraDir, n, 'regrade.json'), 'utf8'), bundles: existsSync(join(extraDir, n, 'regrade.json.sigstore.jsonl')) ? readFileSync(join(extraDir, n, 'regrade.json.sigstore.jsonl'), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)) : [] })) : [];
+  if (extra.length) {
+    const v0 = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, regrades: extra }, NOW);
+    assert.ok(v0.checks.some((c) => c.id === 'regrade_2' && c.ok), 'the grading made elsewhere does not verify as committed; nothing to test against');
+    const flipped = clone(extra); flipped[0].regrade.results[0].verdict = flipped[0].regrade.results[0].verdict === 'pass' ? 'fail' : 'pass';
+    const v1 = m.verifyRunManifest(manifest, { standard, receipts, regrade: baseRegrade ?? undefined, regrades: flipped }, NOW);
+    assert.ok(v1.binding !== 'bound' && v1.checks.some((c) => c.id === 'regrade_2' && !c.ok), 'a flipped verdict in a grading made elsewhere was accepted');
+    passed++; console.log('  ✓ caught: a grading made elsewhere with a verdict flipped without re-signing (regrade_2)');
+  }
+}
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);

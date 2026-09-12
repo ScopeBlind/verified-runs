@@ -72,7 +72,8 @@ for (const dir of sampleDirs) {
   ok('the run standard verifies against the maintainer key it carries', sv.cryptographically_valid);
   if (m.isDemoRecipientKey(standard.recipient.verification_key)) ok('the maintainer is the deterministic demo recipient, so the standard says demo', standard.recipient.organization.includes('demo'));
   else {
-    const keyFile = [join(dirname(samples), 'maintainer-key.json'), join(samples, 'maintainer-key.json')].find((f) => existsSync(f));
+    // The published maintainer key: maintainer-key.json at the repository root (the public repository), or samples/verification-keys/maintainer.json (the monorepo, whose ignore rules keep any *-key.json and any keys/ directory out of git).
+    const keyFile = [join(dirname(samples), 'maintainer-key.json'), join(samples, 'maintainer-key.json'), join(samples, 'verification-keys', 'maintainer.json'), join(process.cwd(), 'maintainer-key.json'), join(process.cwd(), 'samples', 'verification-keys', 'maintainer.json')].find((f) => existsSync(f));
     ok('the standard is signed by the published maintainer key (maintainer-key.json beside the runs)', Boolean(keyFile) && JSON.parse(readFileSync(keyFile, 'utf8')).public_key === standard.recipient.verification_key && standard.recipient.organization === 'ScopeBlind');
   }
   const compiled = m.compileStandard(standard, { tool: standard.enforcement.tool, action_model: standard.enforcement.action_model });
@@ -130,8 +131,16 @@ for (const dir of sampleDirs) {
   }
   const regradePath = join(dir, 'regrade.json');
   const regrade = existsSync(regradePath) ? JSON.parse(readFileSync(regradePath, 'utf8')) : null;
+  // Gradings made elsewhere: regrades/<grader>/regrade.json with its provenance bundle beside it; each must verify, be accepted (by key or by provenance identity), and agree.
+  const extraDir = join(dir, 'regrades');
+  const regradesCtx = existsSync(extraDir) ? readdirSync(extraDir).filter((n) => existsSync(join(extraDir, n, 'regrade.json'))).sort().map((n) => ({ name: n, regrade: JSON.parse(readFileSync(join(extraDir, n, 'regrade.json'), 'utf8')), bytes: readFileSync(join(extraDir, n, 'regrade.json')), bundles: existsSync(join(extraDir, n, 'regrade.json.sigstore.jsonl')) ? readFileSync(join(extraDir, n, 'regrade.json.sigstore.jsonl'), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)) : [] })) : [];
+  for (const [i, r] of regradesCtx.entries()) {
+    const rv = m.verifyRunManifest(manifest, { standard, receipts, regrade, regrades: regradesCtx.map(({ regrade: g, bytes, bundles }) => ({ regrade: g, bytes, bundles })) }, NOW);
+    const c = rv.checks.find((x) => x.id === `regrade_${i + 2}`);
+    ok(`the grading from ${r.name} verifies, is by a grader the standard accepts, and agrees with every verdict${c && !c.ok ? `: ${c.detail}` : c ? ` (${c.detail.slice(0, 160)})` : ''}`, Boolean(c && c.ok));
+  }
   if (regrade) ok('the second grading verifies, is by a distinct key the standard accepts, and agrees with every verdict', m.verifyRunManifest(manifest, { standard, receipts, regrade }, NOW).checks.find((c) => c.id === 'regrade')?.ok === true);
-  const bound = m.verifyRunManifest(manifest, { standard, receipts, calls: calls ? calls.map((c) => ({ tool: c.tool, input: c.input })) : undefined, workspaces: Object.keys(workspaces).length ? workspaces : undefined, regrade }, NOW);
+  const bound = m.verifyRunManifest(manifest, { standard, receipts, regrades: regradesCtx.map(({ regrade: g, bytes, bundles }) => ({ regrade: g, bytes, bundles })), calls: calls ? calls.map((c) => ({ tool: c.tool, input: c.input })) : undefined, workspaces: Object.keys(workspaces).length ? workspaces : undefined, regrade }, NOW);
   const openChecks = bound.checks.filter((c) => !c.ok && !c.informational).map((c) => c.id);
   ok(`with the standard, the receipts${calls ? ', the calls' : ''}${Object.keys(workspaces).length ? ', the workspaces' : ''}${regrade ? ', and the regrade' : ''} the manifest is bound${regrade ? '' : ' except for the verdict evidence the standard asks a second grading for'}`, regrade ? bound.binding === 'bound' : openChecks.every((id) => id === 'verdict_evidence'));
   ok('the manifest names the chain head and count that the receipt log has', manifest.gateway.receipt_count === receipts.length && manifest.gateway.chain_head === m.chainLink(receipts[receipts.length - 1]));
@@ -173,7 +182,7 @@ for (const dir of sampleDirs) {
   if (existsSync(provenanceDir)) {
     const bundles = readdirSync(provenanceDir).filter((f) => f.endsWith('.sigstore.jsonl')).sort().flatMap((f) => readFileSync(join(provenanceDir, f), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)));
     const bytes = { manifest: readFileSync(join(dir, 'manifest.json')), receipts: readFileSync(join(dir, 'receipts.jsonl')), standard: readFileSync(join(dir, 'standard.json')), ...(existsSync(regradePath) ? { regrade: readFileSync(regradePath) } : {}) };
-    const pv = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade, provenance: { bundles, bytes } }, NOW);
+    const pv = m.verifyRunManifest(manifest, { standard, receipts, calls, regrade, regrades: regradesCtx.map(({ regrade: g, bytes: b, bundles: bl }) => ({ regrade: g, bytes: b, bundles: bl })), provenance: { bundles, bytes } }, NOW);
     const provChecks = pv.checks.filter((c) => c.id.startsWith('provenance_'));
     const failedProv = provChecks.filter((c) => !c.ok).map((c) => `${c.id}: ${c.detail}`);
     ok(`the provenance bundles verify offline against the pinned Sigstore trust root (${provChecks.length} checks)${failedProv.length ? `: ${failedProv.join('; ')}` : ''}`, failedProv.length === 0 && pv.provenance?.verified === true);

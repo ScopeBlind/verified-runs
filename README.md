@@ -10,6 +10,8 @@ A benchmark score is a claim by whoever ran it. A verified run is the same score
 
 Beside them, when the maintainer publishes them: `calls.jsonl`, the call behind every receipt (tool and input), bound by the input digest each receipt carries; `workspace/`, what the agent left in each task directory, pinned by digest; `tests/`, the harness's own test output, digested by the manifest; and `regrade.json`, a second grading of the run made by re-running the pinned tests on the archived workspace, signed under a distinct grader key the standard accepts. On a sealed task set the calls and the workspaces are held by the maintainer, and their digests in the manifest still bind them.
 
+A grading made elsewhere sits under `regrades/<grader>/` beside the run: `regrade.json`, and `regrade.json.sigstore.jsonl`, the provenance bundle naming its exact bytes. The standard accepts such a grader by the identity in that bundle (`trust.accepted_grader_provenance`: a repository whose workflow made the grading), not by a key listed in advance, so the grader's key can be one its workflow run generated and discarded. The first such grader is [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), a separate repository under a separate organization with its own workflow, its own runner, and its own key; a reader checks any grading with `--regrade` given twice, the run's own first.
+
 Every tool call the agent made went through [protect-mcp](https://github.com/scopeblind/scopeblind-gateway) under a policy compiled from the maintainer's signed standard, and the harness, not the agent, ran each task's own tests.
 
 ## Verify a run

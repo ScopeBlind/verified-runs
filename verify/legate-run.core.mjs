@@ -6028,12 +6028,10 @@ var PROVENANCE_FILES = { manifest: "manifest.json", receipts: "receipts.jsonl", 
 function workspaceDigest(files) {
   return `sha256:${sha256Hex(canonicalize({ files: [...files].map((f) => ({ path: f.path, sha256: f.sha256 })).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) }))}`;
 }
-function regradeProvenanceIdentity(context) {
-  const prov = context.provenance ?? null;
-  const bytes = prov?.bytes?.regrade;
-  if (!prov || bytes === void 0) return null;
+function regradeProvenanceIdentity(bytes, bundles) {
+  if (bytes === void 0) return null;
   const digest = subjectDigest(bytes);
-  for (const b of prov.bundles) {
+  for (const b of bundles) {
     const r = verifySigstoreBundle(b, {});
     if (r.valid && r.statement?.subjects.some((s) => s.sha256 === digest)) return r.identity;
   }
@@ -6221,19 +6219,22 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
       bound &&= ok;
     }
   }
-  const regrade = context.regrade ?? null;
+  const regradeEntries = [
+    ...context.regrade ? [{ regrade: context.regrade, bytes: context.provenance?.bytes?.regrade, bundles: context.provenance?.bundles }] : [],
+    ...context.regrades ?? []
+  ];
   let reconciled = false;
-  if (regrade) {
+  const acceptedGraderRepos = (std?.trust.accepted_grader_provenance ?? []).filter((g) => g.kind === "github-actions-provenance").map((g) => g.repository.toLowerCase());
+  const runRepo = m.environment.attestation ? /^https:\/\/github\.com\/[^/]+\/[^/]+/.exec(m.environment.attestation.reference)?.[0] ?? null : null;
+  regradeEntries.forEach((entry, i) => {
     anythingGiven = true;
-    const rv = verifyRunRegrade(regrade);
-    const rg = regrade;
+    const rv = verifyRunRegrade(entry.regrade);
+    const rg = entry.regrade;
     const sameRun = rv.valid && rg.manifest_digest === m.digest && rg.run_id === m.run_id;
     const graderByKey = Boolean(std) && sameRun && std.trust.accepted_readback_sources.map((k) => k.toLowerCase()).includes(rg.grader.verification_key.toLowerCase());
-    const regradeIdentity = regradeProvenanceIdentity(context);
-    const acceptedGraderRepos = (std?.trust.accepted_grader_provenance ?? []).filter((g) => g.kind === "github-actions-provenance").map((g) => g.repository.toLowerCase());
+    const regradeIdentity = regradeProvenanceIdentity(entry.bytes, entry.bundles ?? context.provenance?.bundles ?? []);
     const graderByProvenance = Boolean(std) && sameRun && regradeIdentity?.repository !== null && regradeIdentity?.repository !== void 0 && acceptedGraderRepos.includes(regradeIdentity.repository.toLowerCase());
     const graderAccepted = graderByKey || graderByProvenance;
-    const runRepo = m.environment.attestation ? /^https:\/\/github\.com\/[^/]+\/[^/]+/.exec(m.environment.attestation.reference)?.[0] ?? null : null;
     const otherIdentity = Boolean(regradeIdentity?.repository && runRepo && regradeIdentity.repository.toLowerCase() !== runRepo.toLowerCase());
     const madeBy = regradeIdentity ? `, made by ${(regradeIdentity.workflow ?? regradeIdentity.repository ?? "").replace(/^https:\/\/github\.com\//, "")}${otherIdentity ? " (a different repository from the run's)" : runRepo ? " (the run's own repository, a separate job)" : ""}` : "";
     const distinct = sameRun && rg.grader.verification_key.toLowerCase() !== m.signer.verification_key.toLowerCase();
@@ -6241,11 +6242,15 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
       const r = rg.results.find((x) => x.task_id === t.task_id && x.attempt === t.attempt);
       return Boolean(r) && r.verdict === t.verdict && (!t.workspace || r.workspace_digest === t.workspace.digest);
     });
-    reconciled = sameRun && graderAccepted && distinct && agrees;
-    checks.push({ id: "regrade", label: "Second grading", ok: reconciled, detail: !rv.valid ? rv.detail : !sameRun ? "The regrade is for a different manifest." : !std ? "Supply the standard to check the grader key." : !graderAccepted ? "The grader key is not one the standard accepts, and the regrade carries no verified provenance from a repository the standard accepts." : !distinct ? "The regrade was signed by the same key as the manifest; that is not a second party." : !agrees ? "The second grading disagrees with the manifest on at least one verdict or workspace." : `A second grading under key ${rg.grader.key_id}${graderByKey ? "" : " (accepted by its provenance identity)"}${madeBy}, from the archived workspaces with the pinned tests, agrees with every verdict.` });
-    bound &&= reconciled;
-    if (reconciled) establishes.push(`The verdicts were graded twice: by the harness, and again${madeBy || " by a second grader under a distinct key"}; the two agree on every verdict and workspace.`);
-  }
+    const ok = sameRun && graderAccepted && distinct && agrees;
+    const id = i === 0 ? "regrade" : `regrade_${i + 1}`;
+    checks.push({ id, label: i === 0 ? "Second grading" : `Grading ${i + 2}`, ok, detail: !rv.valid ? rv.detail : !sameRun ? "The regrade is for a different manifest." : !std ? "Supply the standard to check the grader." : !graderAccepted ? "The grader key is not one the standard accepts, and the regrade carries no verified provenance from a repository the standard accepts." : !distinct ? "The regrade was signed by the same key as the manifest; that is not a second party." : !agrees ? "This grading disagrees with the manifest on at least one verdict or workspace." : `A grading under key ${rg.grader.key_id}${graderByKey ? "" : " (accepted by its provenance identity)"}${madeBy}, from the archived workspaces with the pinned tests, agrees with every verdict.` });
+    bound &&= ok;
+    if (ok) {
+      reconciled = true;
+      establishes.push(`The verdicts were graded again${madeBy || " by a second grader under a distinct key"}; the gradings agree on every verdict and workspace.`);
+    }
+  });
   if (std) {
     const level = std.requirements.effect_evidence;
     if (level === "independently_reconciled") {
@@ -6332,7 +6337,7 @@ function verifyRunManifest(value, context = {}, now = /* @__PURE__ */ new Date()
   else if (provenance?.verified && provenance.identity) establishes.push(`Provenance verified here against the pinned Sigstore trust root: ${provenance.covered.map((r) => PROVENANCE_FILES[r]).join(", ")} came out of GitHub Actions workflow ${provenance.identity.workflow} at ${provenance.identity.repository}${provenance.identity.commit ? ` commit ${provenance.identity.commit}` : ""}, run ${provenance.identity.run ?? att.reference}; the signing certificate chains to Fulcio and the signature was logged in ${provenance.log?.base_url ?? "the transparency log"} at index ${provenance.log?.index ?? "?"} (${provenance.log?.integrated_time ?? "time unknown"}). What that workflow configured, the sandbox and the network rule, is in the repository at that commit.`);
   else if (prov && prov.bundles.length > 0) not_established.push(`That the run was made in the workflow it names (${att.reference}): the provenance supplied does not verify, or does not name these bytes.`);
   else not_established.push(`That the run was made in the workflow it names: the attestation is referenced (${att.reference}) but its bundle was not supplied. Supply provenance/*.sigstore.jsonl to verify it here, or run gh attestation verify.`);
-  if (!reconciled) not_established.push(regrade ? "That the verdicts are more than the harness's word: the second grading supplied does not reconcile." : "That the verdicts are more than the harness's word: no second grading is supplied. The archived workspace and the pinned tests let anyone make one.");
+  if (!reconciled) not_established.push(regradeEntries.length ? "That the verdicts are more than the harness's word: the second grading supplied does not reconcile." : "That the verdicts are more than the harness's word: no second grading is supplied. The archived workspace and the pinned tests let anyone make one.");
   if (!calls) not_established.push("What any allowed call did: the receipts carry the digest of each input, not the input. Supply the calls log to open them.");
   if (attestedModel) establishes.push(`Every model call (${attestedModel.calls}) was answered by ${attestedModel.model} inside a TDX confidential machine: the model's TEE signed each request and response digest with a key bound into an Intel-signed quote${attestedModel.mr_td ? ` (MRTD ${attestedModel.mr_td.slice(0, 16)}...)` : ""}, verified offline against the pinned Intel root. Not established: the platform's current TCB status, the GPU verdict, and what the model did with the bytes beyond signing them.`);
   else if (matt) not_established.push(`That the model calls were answered inside ${matt.provider}'s TEE: the manifest names the attestation; supply model-calls.jsonl and model-attestation.json to verify it here.`);

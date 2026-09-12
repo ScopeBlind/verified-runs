@@ -15,7 +15,7 @@
  * anyone can make a third.
  */
 import { spawnSync } from 'node:child_process';
-import { createDecipheriv, createHash } from 'node:crypto';
+import { createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -89,7 +89,11 @@ for (const attempt of manifest.attempts) {
 const agree = results.every((r) => manifest.attempts.find((a) => a.task_id === r.task_id && a.attempt === r.attempt)?.verdict === r.verdict);
 console.log(agree ? `regrade agrees with the manifest on all ${results.length} attempt(s)` : 'regrade DISAGREES with the manifest');
 if (sign) {
-  const grader = process.env.LEGATE_GRADER_SEED ? m.runSignerFromPrivate(Buffer.from(process.env.LEGATE_GRADER_SEED.trim(), 'hex'), 'ScopeBlind verified-runs grader') : m.runSignerFromSeed('legate-regrader', 'Legate regrader (demo)');
+  // The grader key: a persistent secret (LEGATE_GRADER_SEED), or an ephemeral key held by this process alone (--keys
+  // ephemeral, the default in an attested job without a seed: the regrade's provenance is what binds it), or the demo key.
+  const keysMode = flag('--keys', process.env.LEGATE_ATTEST === 'github-actions-provenance' && !process.env.LEGATE_GRADER_SEED ? 'ephemeral' : 'seed');
+  const graderName = process.env.LEGATE_GRADER_NAME || (process.env.LEGATE_GRADER_SEED ? 'ScopeBlind verified-runs grader' : keysMode === 'ephemeral' ? 'Grader (ephemeral, held by the workflow run)' : 'Legate regrader (demo)');
+  const grader = process.env.LEGATE_GRADER_SEED ? m.runSignerFromPrivate(Buffer.from(process.env.LEGATE_GRADER_SEED.trim(), 'hex'), graderName) : keysMode === 'ephemeral' ? m.runSignerFromPrivate(randomBytes(32), graderName) : m.runSignerFromSeed('legate-regrader', graderName);
   const ci = process.env.GITHUB_ACTIONS && process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null;
   const regrade = m.createRunRegrade({ manifest, results, environment: { sandbox: ci ? `GitHub Actions runner (${process.platform}), separate job` : `developer machine (${process.platform})`, note: ci ? `Second grading in ${ci}; the tests were obtained ${sealedPath ? 'from the sealed archive' : 'from the benchmark repository at the pinned commit'} and checked against the pin.` : `Second grading on a developer machine; the tests were obtained ${sealedPath ? 'from the sealed archive' : 'from the benchmark repository at the pinned commit'} and checked against the pin.` } }, grader, new Date());
   writeFileSync(outPath, `${JSON.stringify(regrade, null, 2)}\n`);

@@ -74,7 +74,7 @@ jobs:
           # A run made here is public: the calls log and the workspace archives are published with it, so the
           # second grading below (and anyone else) can rebuild the workspaces. Hold them by running the harness
           # on your own machine with --no-disclose-calls --no-disclose-workspace.
-          node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run" --disclose-calls --disclose-workspace
+          node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run" --disclose-calls --disclose-workspace --accept-grader-repo https://github.com/VeritasActa/verified-runs-grader
       - name: Attest provenance of the manifest, the receipt chain, and the standard
         uses: actions/attest-build-provenance@v2
         with:
@@ -141,6 +141,10 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/verified-run/provenance" && gh attestation download ../regrade.json -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl regrade.json.sigstore.jsonl
           node -e 'const fs=require("fs");const [f,run]=process.argv.slice(1);const keep=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter((l)=>{try{const s=JSON.parse(Buffer.from(JSON.parse(l).dsseEnvelope.payload,"base64").toString("utf8"));return String(s.predicate?.runDetails?.metadata?.invocationId||"").includes("/runs/"+run+"/");}catch{return false;}});if(!keep.length)throw new Error("no attestation from this run in "+f);fs.writeFileSync(f,keep.join("\n")+"\n");' regrade.json.sigstore.jsonl "$GITHUB_RUN_ID" && ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-run-regraded
+          path: ${{ runner.temp }}/verified-run
       - name: Read the run with the published verifier, provenance included
         run: |
           extra=""; if [ -f "$RUNNER_TEMP/verified-run/model-calls.jsonl" ]; then extra="--model-calls $RUNNER_TEMP/verified-run/model-calls.jsonl --model-attestation $RUNNER_TEMP/verified-run/model-attestation.json"; fi
@@ -149,7 +153,3 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/runs" && cp -R "$RUNNER_TEMP/verified-run" "$RUNNER_TEMP/runs/"
           node harness/check-verified-run.mjs "$RUNNER_TEMP/runs"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: verified-run-regraded
-          path: ${{ runner.temp }}/verified-run

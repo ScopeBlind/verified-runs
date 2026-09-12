@@ -4,4 +4,4 @@
 
 Every run's `harness.json` records the digest of `harness/verified-run.mjs` and this file together, and the run's standard pins that digest, so verifying a run means verifying exactly these bytes.
 
-sha256 of the current bundle: `075adf61f27c4cbf63b80b416df1a5e1818e8dbb2a6eaa8e322685d6722da1a9`
+sha256 of the current bundle: `d5610dfa64fea79e358c4fed5f9a06d44d3163c9f7238e9b21c7f4a7cb2d0b4f`
