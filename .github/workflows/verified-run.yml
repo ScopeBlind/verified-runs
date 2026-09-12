@@ -73,7 +73,7 @@ jobs:
           # on your own machine with --no-disclose-calls --no-disclose-workspace.
           node harness/verified-run.mjs --agent "${{ inputs.agent }}" --tasks "${{ inputs.tasks }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/verified-run" --disclose-calls --disclose-workspace
       - name: Check the run as a reader would
-        run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl"
+        run: npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl" --calls "$RUNNER_TEMP/verified-run/calls.jsonl"
       - name: Attest provenance of the manifest, the receipt chain, and the standard
         uses: actions/attest-build-provenance@v2
         with:
