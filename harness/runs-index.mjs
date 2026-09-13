@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-/** Print the runs index (Markdown) from the run folders: agent and model, result, who graded, whose keys, where it was made. */
+/** Print the runs index (Markdown) from the run folders, newest first: agent and model, result, who graded, whose keys, where it was made. */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 const base = process.argv[2] ?? 'runs';
-const rows = readdirSync(base).sort().filter((n) => existsSync(join(base, n, 'manifest.json'))).map((n) => {
+const issued = (n) => JSON.parse(readFileSync(join(base, n, 'manifest.json'), 'utf8')).issued_at ?? '';
+const rows = readdirSync(base).filter((n) => existsSync(join(base, n, 'manifest.json'))).sort((a, b) => issued(a).localeCompare(issued(b))).map((n) => {
   const m = JSON.parse(readFileSync(join(base, n, 'manifest.json'), 'utf8'));
   const s = JSON.parse(readFileSync(join(base, n, 'standard.json'), 'utf8'));
   const outside = existsSync(join(base, n, 'regrades')) ? readdirSync(join(base, n, 'regrades')).filter((g) => existsSync(join(base, n, 'regrades', g, 'regrade.json'))) : [];
