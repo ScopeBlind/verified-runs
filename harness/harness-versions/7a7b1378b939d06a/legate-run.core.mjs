@@ -6710,463 +6710,15 @@ function gradeWorkspace(input) {
     rmSync(protectedDir, { recursive: true, force: true });
   }
 }
-
-// src/authority.ts
-var AUTHORITY_GRANT_V1 = "scopeblind.authority_grant.v1";
-var AUTHORITY_ALLOCATION_V1 = "scopeblind.authority_allocation.v1";
-var AUTHORITY_SPEND_V1 = "scopeblind.authority_spend.v1";
-var RECEIVER_DECISION_V1 = "scopeblind.receiver_decision.v1";
-var GRANT_DOMAIN = "scopeblind.authority-grant.v1";
-var ALLOCATION_DOMAIN = "scopeblind.authority-allocation.v1";
-var SPEND_DOMAIN = "scopeblind.authority-spend.v1";
-var DECISION_DOMAIN = "scopeblind.receiver-decision.v1";
-var GRANT_KEYS = ["type", "version", "grant_id", "principal", "holder", "scope", "issued_at", "expires_at", "nonce"];
-var ALLOCATION_KEYS = ["type", "version", "allocation_id", "parent", "holder", "receiver", "amount", "kinds", "issued_at", "expires_at", "nonce"];
-var SPEND_KEYS = ["type", "version", "spend_id", "allocation", "amount", "action", "issued_at", "nonce"];
-var DECISION_KEYS2 = ["type", "version", "decision_id", "spend", "allocation_id", "outcome", "reason_code", "reason", "evidence", "next_actions", "not_permitted", "effect", "journal_head", "receiver", "decided_at", "nonce"];
-var isRecord6 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-var isIso3 = (v) => typeof v === "string" && !Number.isNaN(Date.parse(v));
-var isHex642 = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
-var isAmount = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
-var isKind = (v) => isRecord6(v) && typeof v.action === "string" && v.action.length > 0 && typeof v.resource === "string" && (v.destination === void 0 || typeof v.destination === "string");
-var isIdentity = (v) => isRecord6(v) && typeof v.key_id === "string" && isHex642(v.verification_key);
-function holderFromPrivate(priv, prefix = "holder") {
-  const verification_key = bytesToHex2(ed25519.getPublicKey(priv));
-  return { key_id: keyIdFor(verification_key, prefix), verification_key, priv };
-}
-function patternCovers(pattern2, value) {
-  return pattern2.endsWith("*") ? value.startsWith(pattern2.slice(0, -1)) : pattern2 === value;
-}
-function patternWithin(wide, narrow) {
-  if (wide.endsWith("*")) return narrow.startsWith(wide.slice(0, -1));
-  return wide === narrow;
-}
-function kindCovers(kind, action) {
-  return kind.action === action.action && patternCovers(kind.resource, action.resource) && (kind.destination === void 0 || action.destination !== void 0 && patternCovers(kind.destination, action.destination));
-}
-function kindWithin(wide, narrow) {
-  return wide.action === narrow.action && patternWithin(wide.resource, narrow.resource) && (wide.destination === void 0 || narrow.destination !== void 0 && patternWithin(wide.destination, narrow.destination));
-}
-var kindsWithin = (wide, narrow) => narrow.every((n) => wide.some((w) => kindWithin(w, n)));
-function createAuthorityGrant(input, now = /* @__PURE__ */ new Date(), ids = {}) {
-  const unsigned = {
-    type: AUTHORITY_GRANT_V1,
-    version: 1,
-    grant_id: ids.grant_id ?? `grant:${entropyHex(8)}`,
-    principal: { name: input.principal.name, key_id: input.principal.key_id, verification_key: input.principal.verification_key },
-    holder: { key_id: input.holder.key_id, verification_key: input.holder.verification_key },
-    scope: { kinds: input.kinds.map((k) => ({ ...k })), budget: { dimension: input.dimension, amount: input.amount } },
-    issued_at: now.toISOString(),
-    expires_at: input.expires_at,
-    nonce: ids.nonce ?? entropyHex(16)
-  };
-  return signed(GRANT_DOMAIN, unsigned, GRANT_KEYS, input.principal.priv);
-}
-function createAllocation(input, now = /* @__PURE__ */ new Date(), ids = {}) {
-  const p = input.parent;
-  const parentKinds = p.type === AUTHORITY_GRANT_V1 ? p.scope.kinds : p.kinds;
-  const parentAmount = p.type === AUTHORITY_GRANT_V1 ? p.scope.budget.amount : p.amount;
-  if (p.holder.verification_key !== input.parentHolder.verification_key) throw new Error("an allocation is signed by the holder of what it is carved from");
-  if (!kindsWithin(parentKinds, input.kinds)) throw new Error("an allocation cannot widen the kinds it was carved from");
-  if (!(input.amount >= 0 && input.amount <= parentAmount)) throw new Error("an allocation cannot exceed what it was carved from");
-  const expires_at = input.expires_at ?? p.expires_at;
-  if (Date.parse(expires_at) > Date.parse(p.expires_at)) throw new Error("an allocation cannot outlive what it was carved from");
-  const unsigned = {
-    type: AUTHORITY_ALLOCATION_V1,
-    version: 1,
-    allocation_id: ids.allocation_id ?? `alloc:${entropyHex(8)}`,
-    parent: { type: p.type === AUTHORITY_GRANT_V1 ? "grant" : "allocation", id: p.type === AUTHORITY_GRANT_V1 ? p.grant_id : p.allocation_id, digest: p.digest },
-    holder: { key_id: input.holder.key_id, verification_key: input.holder.verification_key },
-    receiver: { key_id: input.receiver.key_id, verification_key: input.receiver.verification_key },
-    amount: input.amount,
-    kinds: input.kinds.map((k) => ({ ...k })),
-    issued_at: now.toISOString(),
-    expires_at,
-    nonce: ids.nonce ?? entropyHex(16)
-  };
-  return signed(ALLOCATION_DOMAIN, unsigned, ALLOCATION_KEYS, input.parentHolder.priv);
-}
-function createSpend(input, now = /* @__PURE__ */ new Date(), ids = {}) {
-  if (input.allocation.holder.verification_key !== input.holder.verification_key) throw new Error("a spend is signed by the allocation holder");
-  const unsigned = {
-    type: AUTHORITY_SPEND_V1,
-    version: 1,
-    spend_id: input.spend_id,
-    allocation: { id: input.allocation.allocation_id, digest: input.allocation.digest },
-    amount: input.amount,
-    action: { ...input.action },
-    issued_at: now.toISOString(),
-    nonce: ids.nonce ?? entropyHex(16)
-  };
-  return signed(SPEND_DOMAIN, unsigned, SPEND_KEYS, input.holder.priv);
-}
-function createReceiverDecision(input, now = /* @__PURE__ */ new Date(), ids = {}) {
-  const unsigned = {
-    type: RECEIVER_DECISION_V1,
-    version: 1,
-    decision_id: ids.decision_id ?? `decision:${entropyHex(8)}`,
-    spend: input.spend,
-    allocation_id: input.allocation_id,
-    outcome: input.outcome,
-    reason_code: input.reason_code,
-    reason: input.reason,
-    evidence: input.evidence,
-    next_actions: input.next_actions,
-    not_permitted: input.not_permitted,
-    effect: input.effect,
-    journal_head: input.journal_head,
-    receiver: { name: input.receiver.name, key_id: input.receiver.key_id, verification_key: input.receiver.verification_key },
-    decided_at: now.toISOString(),
-    nonce: ids.nonce ?? entropyHex(16)
-  };
-  return signed(DECISION_DOMAIN, unsigned, DECISION_KEYS2, input.receiver.priv);
-}
-var bad = (detail) => ({ shape_valid: false, digest_valid: false, signature_valid: false, cryptographically_valid: false, detail });
-var envelope = (domain, value, keys, key, what) => {
-  const { digest_valid, signature_valid } = checkEnvelope(domain, value, keys, key);
-  return { shape_valid: true, digest_valid, signature_valid, cryptographically_valid: digest_valid && signature_valid, detail: !digest_valid ? `${what} altered after signing` : !signature_valid ? `${what} signature does not verify` : `${what} verifies` };
-};
-function verifyAuthorityGrant(value) {
-  if (!isRecord6(value) || value.type !== AUTHORITY_GRANT_V1 || value.version !== 1) return bad("not an authority grant");
-  const g = value;
-  if (typeof g.grant_id !== "string" || !isIdentity(g.principal) || typeof g.principal.name !== "string" || !isIdentity(g.holder) || !isRecord6(g.scope) || !Array.isArray(g.scope.kinds) || !g.scope.kinds.every(isKind) || !isRecord6(g.scope.budget) || typeof g.scope.budget.dimension !== "string" || !isAmount(g.scope.budget.amount) || !isIso3(g.issued_at) || !isIso3(g.expires_at) || typeof g.nonce !== "string") return bad("authority grant malformed");
-  return envelope(GRANT_DOMAIN, value, GRANT_KEYS, g.principal.verification_key, "grant");
-}
-function verifyAllocation(value, parent) {
-  if (!isRecord6(value) || value.type !== AUTHORITY_ALLOCATION_V1 || value.version !== 1) return bad("not an allocation");
-  const a = value;
-  if (typeof a.allocation_id !== "string" || !isRecord6(a.parent) || !["grant", "allocation"].includes(a.parent.type) || typeof a.parent.id !== "string" || !isHex642(a.parent.digest) || !isIdentity(a.holder) || !isIdentity(a.receiver) || !isAmount(a.amount) || !Array.isArray(a.kinds) || !a.kinds.every(isKind) || !isIso3(a.issued_at) || !isIso3(a.expires_at) || typeof a.nonce !== "string") return bad("allocation malformed");
-  const parentId = parent.type === AUTHORITY_GRANT_V1 ? parent.grant_id : parent.allocation_id;
-  const parentType = parent.type === AUTHORITY_GRANT_V1 ? "grant" : "allocation";
-  if (a.parent.type !== parentType || a.parent.id !== parentId || a.parent.digest !== parent.digest) return bad("the allocation names a different parent than the one supplied");
-  const e = envelope(ALLOCATION_DOMAIN, value, ALLOCATION_KEYS, parent.holder.verification_key, "allocation");
-  if (!e.cryptographically_valid) return e;
-  const parentKinds = parent.type === AUTHORITY_GRANT_V1 ? parent.scope.kinds : parent.kinds;
-  const parentAmount = parent.type === AUTHORITY_GRANT_V1 ? parent.scope.budget.amount : parent.amount;
-  if (!kindsWithin(parentKinds, a.kinds)) return { ...e, cryptographically_valid: false, detail: "the allocation widens the kinds it was carved from" };
-  if (a.amount > parentAmount) return { ...e, cryptographically_valid: false, detail: "the allocation exceeds what it was carved from" };
-  if (Date.parse(a.expires_at) > Date.parse(parent.expires_at)) return { ...e, cryptographically_valid: false, detail: "the allocation outlives what it was carved from" };
-  return e;
-}
-function verifyAllocationChain(grant, allocations) {
-  const gv = verifyAuthorityGrant(grant);
-  if (!gv.cryptographically_valid) return { valid: false, detail: gv.detail, leaf: null, depth: 0 };
-  let parent = grant;
-  for (let i = 0; i < allocations.length; i++) {
-    const av = verifyAllocation(allocations[i], parent);
-    if (!av.cryptographically_valid) return { valid: false, detail: `allocation ${i + 1}: ${av.detail}`, leaf: null, depth: i };
-    parent = allocations[i];
-  }
-  return { valid: true, detail: `grant and ${allocations.length} allocation${allocations.length === 1 ? "" : "s"} verify, each within the one above`, leaf: allocations.length ? parent : null, depth: allocations.length };
-}
-function verifySpend(value, allocation) {
-  if (!isRecord6(value) || value.type !== AUTHORITY_SPEND_V1 || value.version !== 1) return bad("not a spend");
-  const s = value;
-  if (typeof s.spend_id !== "string" || !s.spend_id || !isRecord6(s.allocation) || typeof s.allocation.id !== "string" || !isHex642(s.allocation.digest) || !isAmount(s.amount) || !isRecord6(s.action) || typeof s.action.action !== "string" || typeof s.action.resource !== "string" || !isIso3(s.issued_at) || typeof s.nonce !== "string") return bad("spend malformed");
-  if (s.allocation.id !== allocation.allocation_id || s.allocation.digest !== allocation.digest) return bad("the spend names a different allocation than the one supplied");
-  return envelope(SPEND_DOMAIN, value, SPEND_KEYS, allocation.holder.verification_key, "spend");
-}
-function verifyReceiverDecision(value, expected = {}) {
-  if (!isRecord6(value) || value.type !== RECEIVER_DECISION_V1 || value.version !== 1) return bad("not a receiver decision");
-  const d = value;
-  if (typeof d.decision_id !== "string" || !isRecord6(d.spend) || typeof d.spend.id !== "string" || !isHex642(d.spend.digest) || typeof d.allocation_id !== "string" || !["admitted", "committed", "released", "refused", "unresolved"].includes(d.outcome) || typeof d.reason_code !== "string" || typeof d.reason !== "string" || !isRecord6(d.evidence) || !Array.isArray(d.next_actions) || !Array.isArray(d.not_permitted) || !(d.effect === null || isRecord6(d.effect)) || typeof d.journal_head !== "string" || !isIdentity(d.receiver) || typeof d.receiver.name !== "string" || !isIso3(d.decided_at) || typeof d.nonce !== "string") return bad("receiver decision malformed");
-  if (expected.receiver_key && d.receiver.verification_key.toLowerCase() !== expected.receiver_key.toLowerCase()) return bad("the decision is signed by a different receiver than expected");
-  if (expected.spend_digest && d.spend.digest !== expected.spend_digest) return bad("the decision is about a different spend");
-  return envelope(DECISION_DOMAIN, value, DECISION_KEYS2, d.receiver.verification_key, "receiver decision");
-}
-function signCanonical(domain, value, priv) {
-  const digest = sha256Hex(canonicalize({ domain, value }));
-  return { digest, signature: { algorithm: "Ed25519", value: bytesToHex2(ed25519.sign(hexToBytes2(digest), priv)) } };
-}
-function verifyCanonical(domain, value, digest, signature, verificationKey) {
-  if (signature?.algorithm !== "Ed25519" || sha256Hex(canonicalize({ domain, value })) !== digest) return false;
-  try {
-    return ed25519.verify(hexToBytes2(signature.value), hexToBytes2(digest), hexToBytes2(verificationKey));
-  } catch {
-    return false;
-  }
-}
-
-// src/receiver-runtime.ts
-var MemoryJournal = class {
-  list = [];
-  append(entry) {
-    this.list.push(entry);
-  }
-  entries() {
-    return this.list.slice();
-  }
-};
-var GENESIS = "0".repeat(64);
-function journalHead(prev, entry) {
-  return sha256Hex(canonicalize({ prev, entry }));
-}
-var ReceiverRuntime = class _ReceiverRuntime {
-  constructor(key, store, clock = () => /* @__PURE__ */ new Date()) {
-    this.key = key;
-    this.store = store;
-    this.clock = clock;
-  }
-  views = /* @__PURE__ */ new Map();
-  head = GENESIS;
-  seq = 0;
-  /** A request quota over the journal: at most `max` admissions per allocation in any window. Enforced at admission, in order, so two in-flight requests cannot both pass on the same allowance. */
-  quota = null;
-  get identity() {
-    return { name: this.key.name, key_id: this.key.key_id, verification_key: this.key.verification_key };
-  }
-  get journalHead() {
-    return this.head;
-  }
-  /** Rebuild a receiver from its journal; the journal carries the allocations it registered. */
-  static restore(key, store, clock) {
-    const r = new _ReceiverRuntime(key, new MemoryJournal(), clock);
-    for (const e of store.entries()) {
-      const expected = journalHead(r.head, { ...e, head: void 0 });
-      if (expected !== e.head) throw new Error(`journal broken at seq ${e.seq}: head does not match`);
-      r.applyEntry(e);
-      r.head = e.head;
-      r.seq = e.seq;
-    }
-    r.store = store;
-    return r;
-  }
-  applyEntry(e) {
-    if (e.kind === "registered" && e.registered) {
-      this.views.set(e.allocation_id, { allocation: e.registered.allocation, grant_amount: e.registered.grant_amount, consumed: 0, reserved: 0, spends: /* @__PURE__ */ new Map() });
-      return;
-    }
-    const v = this.views.get(e.allocation_id);
-    if (!v || !e.spend_id) return;
-    if (e.kind === "reserved") {
-      v.reserved += e.amount;
-      v.spends.set(e.spend_id, { amount: e.amount, state: "reserved", spend_digest: e.spend_digest ?? "", effect: null });
-    } else if (e.kind === "committed") {
-      const s = v.spends.get(e.spend_id);
-      if (s && s.state === "reserved") {
-        s.state = "committed";
-        s.effect = e.effect ?? null;
-        v.reserved -= s.amount;
-        v.consumed += s.amount;
-      }
-    } else if (e.kind === "released") {
-      const s = v.spends.get(e.spend_id);
-      if (s && s.state === "reserved") {
-        s.state = "released";
-        v.reserved -= s.amount;
-      }
-    }
-  }
-  write(entry) {
-    const partial = { seq: this.seq + 1, at: this.clock().toISOString(), prev: this.head, ...entry };
-    const full = { ...partial, head: journalHead(this.head, partial) };
-    this.store.append(full);
-    this.applyEntry(full);
-    this.head = full.head;
-    this.seq = full.seq;
-    return full;
-  }
-  balances(allocation_id) {
-    const v = this.views.get(allocation_id);
-    if (!v) return null;
-    return { grant_amount: v.grant_amount, allocation_amount: v.allocation.amount, consumed: v.consumed, reserved: v.reserved, remaining: v.allocation.amount - v.consumed - v.reserved };
-  }
-  /** Register the allocation a holder will spend here: the whole chain from the grant must verify and the leaf must be made out to this receiver. */
-  register(grant, chain) {
-    const cv = verifyAllocationChain(grant, chain);
-    if (!cv.valid || !cv.leaf) return { ok: false, detail: cv.leaf ? cv.detail : "a spend needs at least one allocation, made out to a receiver" };
-    if (cv.leaf.receiver.verification_key.toLowerCase() !== this.key.verification_key.toLowerCase()) return { ok: false, detail: `the allocation is spendable at ${cv.leaf.receiver.key_id}, not here` };
-    if (this.views.has(cv.leaf.allocation_id)) return { ok: true, detail: "already registered" };
-    this.write({ kind: "registered", allocation_id: cv.leaf.allocation_id, spend_id: null, spend_digest: null, amount: cv.leaf.amount, registered: { allocation: cv.leaf, grant_amount: grant.scope.budget.amount } });
-    return { ok: true, detail: cv.detail };
-  }
-  decide(spend, outcome, reason_code, reason, next_actions, not_permitted, effect) {
-    const evidence = this.balances(spend.allocation.id) ?? { grant_amount: 0, allocation_amount: 0, consumed: 0, reserved: 0, remaining: 0 };
-    return createReceiverDecision({ spend: { id: spend.spend_id, digest: spend.digest }, allocation_id: spend.allocation.id, outcome, reason_code, reason, evidence, next_actions, not_permitted, effect, journal_head: this.head, receiver: this.key }, this.clock());
-  }
-  refuse(spend, code, reason, next = [], not = []) {
-    this.write({ kind: "refused", allocation_id: spend.allocation.id, spend_id: spend.spend_id, spend_digest: spend.digest, amount: spend.amount, note: code });
-    return this.decide(spend, "refused", code, reason, next, not.length ? not : ["Retry under a new spend id or a new child allocation to obtain another allowance: the same authority is spent once."], null);
-  }
-  /** Admit a spend: verify it against its registered allocation, check the kind and the expiry, answer a repeated spend id the same way, and reserve. */
-  admit(spend) {
-    const v = this.views.get(spend.allocation.id);
-    if (!v) return this.refuse(spend, "unauthorized", "No allocation by that id is registered here. Register the grant and the allocation chain first.", ["Register the allocation chain, then present the spend again."]);
-    const sv = verifySpend(spend, v.allocation);
-    if (!sv.cryptographically_valid) return this.refuse(spend, "unauthorized", `The spend does not verify against the allocation it names (${sv.detail}).`);
-    const prior = v.spends.get(spend.spend_id);
-    if (prior) {
-      if (prior.spend_digest !== spend.digest) return this.refuse(spend, "duplicate", "A different spend already used this spend id. An operation identity names one operation.");
-      if (prior.state === "reserved") return this.decide(spend, "admitted", "duplicate", "Already admitted and still reserved: this is the same operation, not a second allowance.", ["Complete or reconcile the operation."], ["Spend the reserved amount elsewhere."], null);
-      if (prior.state === "committed") return this.decide(spend, "committed", "duplicate", "Already committed: the same operation, answered the same way.", [], ["Obtain a second effect from one spend."], prior.effect);
-      return this.refuse(spend, "duplicate", "This spend was released; a released spend is not readmitted. Present a new spend id.", ["Present a new spend for the amount still remaining."]);
-    }
-    const now = this.clock().getTime();
-    if (now > Date.parse(v.allocation.expires_at)) return this.refuse(spend, "expired", `The allocation expired at ${v.allocation.expires_at}.`, ["Ask the principal for a new allocation."]);
-    if (!v.allocation.kinds.some((k) => kindCovers(k, spend.action))) return this.refuse(spend, "kind_not_allowed", `The allocation does not cover ${spend.action.action} on ${spend.action.resource}${spend.action.destination ? ` to ${spend.action.destination}` : ""}.`, ["Ask the principal for an allocation that covers this kind of action."], ["Reach this kind of action through another tool or route: the kinds are the grant, not the tool."]);
-    if (this.quota) {
-      const cutoff = now - this.quota.window_seconds * 1e3;
-      const recent = this.store.entries().filter((e) => e.allocation_id === spend.allocation.id && e.kind === "reserved" && Date.parse(e.at) >= cutoff).length;
-      if (recent + 1 > this.quota.max) return this.refuse(spend, "quota", `${recent} admissions in the last ${this.quota.window_seconds} s on this allocation; the quota is ${this.quota.max}. The window counts admissions, in-flight ones included.`, ["Wait for the window to pass, or ask the principal for a higher quota."], ["Spread the requests over several spend ids to evade the count: the count is per allocation."]);
-    }
-    const remaining = v.allocation.amount - v.consumed - v.reserved;
-    if (spend.amount > remaining) {
-      const pending = [...v.spends.entries()].filter(([, s]) => s.state === "reserved").map(([id]) => id);
-      return this.refuse(spend, "insufficient", `This allocation has ${remaining} of ${v.allocation.amount} unspent (${v.consumed} consumed, ${v.reserved} reserved); the spend asks for ${spend.amount}.`, [`Reduce the spend to at most ${remaining}.`, ...pending.length ? [`Wait for ${pending.length === 1 ? `reservation ${pending[0]}` : `${pending.length} reservations`} to resolve.`] : [], "Ask the principal to reallocate unused authority to this allocation."], ["Retry under a new child allocation to obtain another allowance: children are allocated from the same total."]);
-    }
-    this.write({ kind: "reserved", allocation_id: spend.allocation.id, spend_id: spend.spend_id, spend_digest: spend.digest, amount: spend.amount });
-    return this.decide(spend, "admitted", "ok", `Admitted and reserved: ${spend.amount} of ${remaining} unspent.`, ["Perform the operation under this spend id, then commit or release."], ["Perform it twice."], null);
-  }
-  spendFor(allocation_id, spend_id) {
-    const v = this.views.get(allocation_id);
-    const s = v?.spends.get(spend_id);
-    return v && s ? { v, s } : null;
-  }
-  commit(spend, effect) {
-    const f = this.spendFor(spend.allocation.id, spend.spend_id);
-    if (!f) return this.decide(spend, "refused", "not_admitted", "Nothing is reserved under this spend id; admit first.", ["Present the spend for admission."], [], null);
-    if (f.s.state === "committed") return this.decide(spend, "committed", "duplicate", "Already committed.", [], [], f.s.effect);
-    if (f.s.state === "released") return this.decide(spend, "refused", "not_admitted", "This spend was released; it cannot be committed.", ["Present a new spend."], [], null);
-    this.write({ kind: "committed", allocation_id: spend.allocation.id, spend_id: spend.spend_id, spend_digest: spend.digest, amount: f.s.amount, effect });
-    return this.decide(spend, "committed", "ok", `Committed: ${f.s.amount} consumed.`, [], ["Obtain a second effect from this spend."], effect);
-  }
-  release(spend, reason) {
-    const f = this.spendFor(spend.allocation.id, spend.spend_id);
-    if (!f || f.s.state !== "reserved") return this.decide(spend, "refused", "not_admitted", "Nothing is reserved under this spend id.", [], [], null);
-    this.write({ kind: "released", allocation_id: spend.allocation.id, spend_id: spend.spend_id, spend_digest: spend.digest, amount: f.s.amount, note: reason });
-    return this.decide(spend, "released", "effect_failed", `Released: ${reason}. The amount is unspent again.`, ["Present a new spend if the operation is to be retried."], [], null);
-  }
-  /** Transactional mode: reserve, run the effect in this step, commit; a failed effect releases; the three are one journal transaction from the caller's view. */
-  transact(spend, effect) {
-    const admitted = this.admit(spend);
-    if (admitted.outcome !== "admitted" || admitted.reason_code === "duplicate") return admitted;
-    let result;
-    try {
-      result = effect(spend);
-    } catch (err) {
-      return this.release(spend, `the effect failed: ${err.message}`);
-    }
-    return this.commit(spend, result);
-  }
-  /** External-effect mode: admission is durable before dispatch; the dispatch carries the spend id as its operation identity; an ambiguous result stays reserved. */
-  dispatch(spend, dispatcher) {
-    const admitted = this.admit(spend);
-    if (admitted.outcome !== "admitted" || admitted.reason_code === "duplicate") return admitted;
-    const result = dispatcher(spend.spend_id, spend);
-    if (result.outcome === "done") return this.commit(spend, result.effect);
-    if (result.outcome === "failed") return this.release(spend, result.reason);
-    this.write({ kind: "unresolved", allocation_id: spend.allocation.id, spend_id: spend.spend_id, spend_digest: spend.digest, amount: spend.amount, note: result.reason });
-    return this.decide(spend, "unresolved", "effect_ambiguous", `The outcome is ambiguous (${result.reason}); the reservation stands until reconciled. A timeout does not release authority, because the operation may still complete.`, ["Reconcile with the destination under this spend id, then commit or release."], ["Treat the timeout as a release and spend the amount elsewhere."], null);
-  }
-  /** After an ambiguous dispatch: the destination's answer, once known. */
-  reconcile(spend, result) {
-    if (result.outcome === "done") return this.commit(spend, result.effect);
-    if (result.outcome === "failed") return this.release(spend, result.reason);
-    return this.decide(spend, "unresolved", "effect_ambiguous", "Still ambiguous; the reservation stands.", ["Reconcile again."], [], null);
-  }
-  /** The receiver's part of the invariant: for every allocation it holds, consumed + reserved <= amount. */
-  conservation() {
-    const allocations = [...this.views.values()].map((v) => ({ allocation_id: v.allocation.allocation_id, amount: v.allocation.amount, consumed: v.consumed, reserved: v.reserved, unspent: v.allocation.amount - v.consumed - v.reserved }));
-    return { ok: allocations.every((a) => a.unspent >= 0 && a.consumed >= 0 && a.reserved >= 0), allocations };
-  }
-};
-function replayQuota(entries, quota) {
-  const out = [];
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    if (e.kind !== "reserved" && !(e.kind === "refused" && e.note === "quota")) continue;
-    const cutoff = Date.parse(e.at) - quota.window_seconds * 1e3;
-    const recent = entries.slice(0, i).filter((h) => h.allocation_id === e.allocation_id && h.kind === "reserved" && Date.parse(h.at) >= cutoff).length;
-    out.push({ seq: e.seq, spend_id: e.spend_id ?? "", allocation_id: e.allocation_id, admitted: recent + 1 <= quota.max, recent });
-  }
-  return out;
-}
-var Allocator = class _Allocator {
-  constructor(holder, root) {
-    this.holder = holder;
-    this.root = root;
-    if (root.holder.verification_key !== holder.verification_key) throw new Error("an allocator holds what it allocates");
-  }
-  children = [];
-  ownSpent = 0;
-  get total() {
-    return this.root.type === AUTHORITY_GRANT_V1 ? this.root.scope.budget.amount : this.root.amount;
-  }
-  get allocated() {
-    return this.children.reduce((n, c) => n + c.allocation.amount, 0);
-  }
-  get undistributed() {
-    return this.total - this.allocated - this.ownSpent;
-  }
-  /** What the holder spent directly at its own receiver (from its receiver's committed and reserved decisions), which children can no longer be carved from. */
-  noteOwnSpend(amount) {
-    if (amount < 0) throw new Error("a spend is not negative");
-    this.ownSpent += amount;
-  }
-  allocate(child, now = /* @__PURE__ */ new Date(), ids = {}) {
-    if (child.amount > this.undistributed) throw new Error(`cannot allocate ${child.amount}: ${this.undistributed} of ${this.total} undistributed (${this.allocated} allocated to ${this.children.length} children, ${this.ownSpent} spent by the holder)`);
-    const allocation = createAllocation({ parent: this.root, parentHolder: this.holder, holder: child.holder, receiver: child.receiver, amount: child.amount, kinds: child.kinds, expires_at: child.expires_at }, now, ids);
-    this.children.push({ allocation });
-    return allocation;
-  }
-  journal() {
-    return this.children.map((c) => c.allocation);
-  }
-  static restore(holder, root, allocations, ownSpent = 0) {
-    const a = new _Allocator(holder, root);
-    for (const al of allocations) a.children.push({ allocation: al });
-    a.ownSpent = ownSpent;
-    if (a.undistributed < 0) throw new Error("the journal allocates more than the holder holds");
-    return a;
-  }
-};
-function checkConservation(grant, allocations, receivers) {
-  const byId = new Map(allocations.map((a) => [a.allocation_id, a]));
-  const childrenOf = (id, type) => allocations.filter((a) => a.parent.type === type && a.parent.id === id);
-  const balancesOf = (id) => {
-    for (const r of receivers) {
-      const b = r.balances(id);
-      if (b) return b;
-    }
-    return null;
-  };
-  let consumed = 0, reserved = 0, unspent = 0;
-  const visit = (a) => {
-    const kids = childrenOf(a.allocation_id, "allocation");
-    const b = balancesOf(a.allocation_id);
-    const own = b ? b.consumed + b.reserved : 0;
-    if (b) {
-      consumed += b.consumed;
-      reserved += b.reserved;
-    }
-    const kidsTotal = kids.reduce((n, k) => n + visit(k), 0);
-    const mine = a.amount - own - kidsTotal;
-    if (mine < 0) throw new Error(`allocation ${a.allocation_id} over-committed: ${own} spent here and ${kidsTotal} allocated from ${a.amount}`);
-    unspent += mine;
-    return a.amount;
-  };
-  let top = 0;
-  for (const a of childrenOf(grant.grant_id, "grant")) top += visit(a);
-  const undistributed = grant.scope.budget.amount - top;
-  const ok = undistributed >= 0 && consumed + reserved + unspent + undistributed <= grant.scope.budget.amount + 1e-9 && consumed + reserved + unspent + undistributed >= grant.scope.budget.amount - 1e-9;
-  return { ok, consumed, reserved, unspent, undistributed, grant: grant.scope.budget.amount, detail: `${consumed} consumed + ${reserved} reserved + ${unspent} unspent allocated + ${undistributed} undistributed = ${consumed + reserved + unspent + undistributed} of ${grant.scope.budget.amount}` };
-}
 export {
-  AUTHORITY_ALLOCATION_V1,
-  AUTHORITY_GRANT_V1,
-  AUTHORITY_SPEND_V1,
-  Allocator,
   GATEWAY_DEMO_KID,
   GATEWAY_DEMO_LABEL,
   GATEWAY_DEMO_PUBLIC_KEY,
   GATEWAY_DEMO_SEED,
   METHOD_LABELS,
-  MemoryJournal,
   PROOF_REQUEST_V1,
-  RECEIVER_DECISION_V1,
   RUN_MANIFEST_V1,
   RUN_REGRADE_V1,
-  ReceiverRuntime,
   SIGSTORE_PUBLIC_GOOD,
   TEMPORAL_POLICY_V1,
   attestationEntries,
@@ -7175,15 +6727,10 @@ export {
   canonicalize,
   certificateIdentity,
   chainLink,
-  checkConservation,
   compileStandard,
-  createAllocation,
-  createAuthorityGrant,
   createProofRequest,
-  createReceiverDecision,
   createRunManifest,
   createRunRegrade,
-  createSpend,
   dssePae,
   enforcementBlock,
   evaluateCompiledPolicy,
@@ -7194,21 +6741,15 @@ export {
   generateRecipientKey,
   gradeWorkspace,
   gradingProfile,
-  holderFromPrivate,
   isDemoGatewayKey,
   isDemoRecipientKey,
   isDemoRunSignerKey,
   isDemoTrustKey,
-  journalHead,
-  kindCovers,
-  kindWithin,
-  kindsWithin,
   parseCertificate,
   parseModelCalls,
   parseReceiptLog,
   parseSigstoreBundle,
   parseTdxQuote,
-  patternCovers,
   personalSignDigest,
   policyDigest,
   projectEvents,
@@ -7218,7 +6759,6 @@ export {
   recipientKeyFromPrivate,
   recipientKeyFromSeed,
   recoverSigner,
-  replayQuota,
   resolveReceiptKey,
   rootFromInclusionProof,
   runManifestReadback,
@@ -7228,7 +6768,6 @@ export {
   scoringHijackArtifacts,
   setDeterministicEntropy,
   sha256Hex,
-  signCanonical,
   signedText,
   subjectDigest,
   taskSetDigest,
@@ -7237,18 +6776,12 @@ export {
   toDogwoodTrace,
   trustProvenance,
   verifyActaChain,
-  verifyAllocation,
-  verifyAllocationChain,
   verifyAttestedCalls,
-  verifyAuthorityGrant,
-  verifyCanonical,
   verifyModelAttestation,
   verifyProofRequest,
-  verifyReceiverDecision,
   verifyRunManifest,
   verifyRunRegrade,
   verifySigstoreBundle,
-  verifySpend,
   verifyTdxQuote,
   workspaceDigest
 };

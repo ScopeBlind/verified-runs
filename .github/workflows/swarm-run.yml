@@ -1,0 +1,61 @@
+# A swarm run in CI, with provenance: several agents on the desk task against
+# the synthetic services behind receivers, one configuration per dispatch,
+# every member's manifest and the swarm manifest attested with GitHub's build
+# provenance. Manual dispatch only.
+name: swarm-run
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'A (receipts and allowlists), B (conserved authority, receiver checks, history rules, governed memory), or C (B with the task and policy repaired)'
+        default: B
+      agent:
+        description: 'scripted (the procedure, no model) or attested (the model loop on the attested route; needs NEARAI_CLOUD_API_KEY)'
+        default: attested
+      agents:
+        description: 'how many of the six agents to run'
+        default: '6'
+      model:
+        description: 'model name on the attested route'
+        default: Qwen/Qwen3.8-27B
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Swarm run
+        env:
+          NEARAI_CLOUD_API_KEY: ${{ secrets.NEARAI_CLOUD_API_KEY }}
+          LEGATE_MAINTAINER_SEED: ${{ secrets.LEGATE_MAINTAINER_SEED }}
+          LEGATE_ATTEST: github-actions-provenance
+        run: node harness/swarm-run.mjs --config "${{ inputs.config }}" --agent "${{ inputs.agent }}" --agents "${{ inputs.agents }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/swarm-run"
+      - name: Attest provenance of the swarm manifest, the standard, and every member's manifest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/swarm-run/swarm.json
+            ${{ runner.temp }}/swarm-run/standard.json
+            ${{ runner.temp }}/swarm-run/outcomes.json
+            ${{ runner.temp }}/swarm-run/agents/*/manifest.json
+      - name: Keep the attestation bundles beside the run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/swarm-run" && mkdir -p provenance
+          keep_this_run() { node -e 'const fs=require("fs");const [f,run]=process.argv.slice(1);const keep=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter((l)=>{try{const s=JSON.parse(Buffer.from(JSON.parse(l).dsseEnvelope.payload,"base64").toString("utf8"));return String(s.predicate?.runDetails?.metadata?.invocationId||"").includes("/runs/"+run+"/");}catch{return false;}});if(!keep.length)throw new Error("no attestation from this run in "+f);fs.writeFileSync(f,keep.join("\n")+"\n");' "$1" "$GITHUB_RUN_ID"; }
+          for f in swarm.json standard.json outcomes.json; do (cd provenance && gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$f.sigstore.jsonl" && keep_this_run "$f.sigstore.jsonl"); done
+          for d in agents/*/; do id=$(basename "$d"); (cd provenance && gh attestation download "../agents/$id/manifest.json" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$id.manifest.json.sigstore.jsonl" && keep_this_run "$id.manifest.json.sigstore.jsonl"); done
+          ls -la provenance
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swarm-run
+          path: ${{ runner.temp }}/swarm-run
+      - name: Check the run as a reader would
+        run: node harness/check-swarm.mjs "$RUNNER_TEMP/swarm-run"
