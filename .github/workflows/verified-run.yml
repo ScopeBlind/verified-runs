@@ -105,6 +105,11 @@ jobs:
           # so the only failing check allowed is verdict_evidence. Anything else fails this job.
           out=$(npx @veritasacta/verify "$RUNNER_TEMP/verified-run/manifest.json" --standard "$RUNNER_TEMP/verified-run/standard.json" --receipts "$RUNNER_TEMP/verified-run/receipts.jsonl" --calls "$RUNNER_TEMP/verified-run/calls.jsonl" $extra --json || true)
           node -e 'const r = JSON.parse(process.argv[1]); const bad = r.checks.filter((c) => !c.ok && !c.informational && c.id !== "verdict_evidence"); if (!r.valid || bad.length) { console.error("failing checks:", JSON.stringify(bad, null, 2)); process.exit(1); } console.log(`binds except for the second grading, which the next job makes (${r.checks.length} checks)`);' "$out"
+
+  regrade:
+    needs: run
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
