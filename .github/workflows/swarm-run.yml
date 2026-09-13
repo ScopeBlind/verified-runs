@@ -36,6 +36,11 @@ jobs:
           LEGATE_MAINTAINER_SEED: ${{ secrets.LEGATE_MAINTAINER_SEED }}
           LEGATE_ATTEST: github-actions-provenance
         run: node harness/swarm-run.mjs --config "${{ inputs.config }}" --agent "${{ inputs.agent }}" --agents "${{ inputs.agents }}" --model "${{ inputs.model }}" --out "$RUNNER_TEMP/swarm-run"
+      - name: Keep the run before anything else can fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarm-run-raw
+          path: ${{ runner.temp }}/swarm-run
       - name: Attest provenance of the swarm manifest, the standard, and every member's manifest
         uses: actions/attest-build-provenance@v2
         with:
@@ -51,7 +56,7 @@ jobs:
           cd "$RUNNER_TEMP/swarm-run" && mkdir -p provenance
           keep_this_run() { node -e 'const fs=require("fs");const [f,run]=process.argv.slice(1);const keep=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter((l)=>{try{const s=JSON.parse(Buffer.from(JSON.parse(l).dsseEnvelope.payload,"base64").toString("utf8"));return String(s.predicate?.runDetails?.metadata?.invocationId||"").includes("/runs/"+run+"/");}catch{return false;}});if(!keep.length)throw new Error("no attestation from this run in "+f);fs.writeFileSync(f,keep.join("\n")+"\n");' "$1" "$GITHUB_RUN_ID"; }
           for f in swarm.json standard.json outcomes.json; do (cd provenance && gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$f.sigstore.jsonl" && keep_this_run "$f.sigstore.jsonl"); done
-          for d in agents/*/; do id=$(basename "$d"); (cd provenance && gh attestation download "../agents/$id/manifest.json" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$id.manifest.json.sigstore.jsonl" && keep_this_run "$id.manifest.json.sigstore.jsonl"); done
+          for f in agents/*/manifest.json; do [ -e "$f" ] || continue; id=$(basename "$(dirname "$f")"); (cd provenance && gh attestation download "../$f" -R "$GITHUB_REPOSITORY" && mv sha256:*.jsonl "$id.manifest.json.sigstore.jsonl" && keep_this_run "$id.manifest.json.sigstore.jsonl"); done
           ls -la provenance
       - uses: actions/upload-artifact@v4
         with:

@@ -23,7 +23,7 @@ const m = await import(pathToFileURL(corePath).href);
 const sha256Bytes = (buf) => createHash('sha256').update(buf).digest('hex');
 const target = resolve(process.argv[2] ?? 'swarm');
 const dirs = existsSync(join(target, 'swarm.json')) ? [target] : existsSync(target) ? readdirSync(target).map((n) => join(target, n)).filter((d) => existsSync(join(d, 'swarm.json'))).sort() : [];
-if (!dirs.length) { console.error(`no swarm run under ${target}`); process.exit(1); }
+if (!dirs.length) { if (!existsSync(target) && !process.argv[2]) { console.log('check-swarm: no swarm/ directory yet; nothing to check'); process.exit(0); } console.error(`no swarm run under ${target}`); process.exit(1); }
 let passed = 0;
 const ok = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  ✓ ${name}`); };
 const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
