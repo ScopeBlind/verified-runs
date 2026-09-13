@@ -1,0 +1,17 @@
+// Generated from a Legate temporal policy (legate-temporal.v1). A base permit, then one forbid per rule, firing at the event that breaks it.
+// Derived predicates carried by the trace (Dogwood compares, it does not pattern-match); each is: the command matches any of the globs.
+//   p_no_egress_after_secrets_trigger := command like "*secret*" or "*credential*" or "*passwd*" or "*api_key*"
+//   p_no_egress_after_secrets_forbid := command like "*curl *" or "*wget *" or "*nc *" or "*ssh *" or "*scp *" or "*ftp *"
+@id("legate_base_permit")
+permit (principal, action, resource);
+@id("calls_per_attempt")
+forbid (principal, action == Legate::Action::"Bash", resource)
+when temporal {
+    exists (n: Long). ((count_within(900s, Legate::Action::"Bash"::request{ input.task: context.input.task })) == n && n > 120)
+};
+@id("no_egress_after_secrets")
+forbid (principal, action == Legate::Action::"Bash", resource)
+when { context.input.p_no_egress_after_secrets_forbid == true }
+when temporal {
+    formerly within 86400s Legate::Action::"Bash"::request{ input.task: context.input.task, input.p_no_egress_after_secrets_trigger: true }
+};

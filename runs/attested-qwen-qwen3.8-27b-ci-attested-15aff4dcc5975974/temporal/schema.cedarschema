@@ -1,0 +1,7 @@
+namespace Legate {
+  type CallInput = { command: String, task: String, p_no_egress_after_secrets_trigger: Bool, p_no_egress_after_secrets_forbid: Bool };
+  type SystemContext = { now: datetime };
+  entity Agent;
+  entity Gate;
+  action "Bash" appliesTo { principal: [Agent], resource: [Gate], context: { input: CallInput, system: SystemContext } };
+}
