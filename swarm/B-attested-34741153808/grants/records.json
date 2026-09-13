@@ -1,0 +1,34 @@
+{
+  "type": "scopeblind.authority_grant.v1",
+  "version": 1,
+  "grant_id": "grant:desk:records",
+  "principal": {
+    "name": "ScopeBlind verified-runs maintainer, as the desk principal",
+    "key_id": "principal:bb7988e17a58dff7",
+    "verification_key": "817e4750669fc4d302f6801f3582ad741dda1274cb9a372068c932e4d0552aa5"
+  },
+  "holder": {
+    "key_id": "holder:813df67964e9c96a",
+    "verification_key": "3b3749740aa64f2b9ccb5c410eaaf87ce9488e72de2a6a44d545ba49ee13604a"
+  },
+  "scope": {
+    "kinds": [
+      {
+        "action": "read",
+        "resource": "records/*"
+      }
+    ],
+    "budget": {
+      "dimension": "reads",
+      "amount": 280
+    }
+  },
+  "issued_at": "2026-09-13T05:47:25.987Z",
+  "expires_at": "2026-09-13T11:47:25.986Z",
+  "nonce": "36aab6513d5127e288d4f9cdf8bfb848",
+  "digest": "8a75adf54682e3b8d6f7b9a7cc4d3dbd9d662c3fc68470a9f18aea123f0128f5",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "84909cd3e5e4e93446a60cbcda37df657513c34d7f2e98c16c8ab000192f9db5299666877713b47462f8800fdce2591b5f91a233ef733a482771354fc58e670e"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "records": {
+    "key_id": "receiver:17c606f295b0b6d1",
+    "verification_key": "41016b9a5feb491684ab78ff4c0e05118dfc4992eb6c5c4e9de95754442914b3",
+    "quota": {
+      "window_seconds": 60,
+      "max": 20
+    }
+  },
+  "ledger": {
+    "key_id": "receiver:df75cb56405e9165",
+    "verification_key": "e3960b49ac261968a0e568f4d7f89d472690b6d2e79b6fe566f1eccf74c4b5a9",
+    "quota": null
+  },
+  "mail": {
+    "key_id": "receiver:54dcd60d0b079d70",
+    "verification_key": "3e685ef239e3f455f96803832baaaaba015b5ee71e0ffd2cf757644532a63e18",
+    "quota": null
+  },
+  "cache": {
+    "key_id": "receiver:a8eedad5d41abc31",
+    "verification_key": "d840d42b3707116c960676c8c470870f4280ebe0a81ce4764b4a344b29914738",
+    "quota": {
+      "window_seconds": 60,
+      "max": 20
+    }
+  }
+}

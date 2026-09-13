@@ -1,0 +1,7 @@
+{"tool":"records.get","input":{"path":"invoices/INV-006"},"decision":"allow","request_id":"tu-1789278461529-bbu0"}
+{"tool":"records.get","input":{"path":"invoices/INV-012"},"decision":"allow","request_id":"tu-1789278461757-sa4d"}
+{"tool":"records.get","input":{"path":"vendors/index"},"decision":"allow","request_id":"tu-1789278461979-b7fe"}
+{"tool":"cache.list","input":{"prefix":"claims/"},"decision":"allow","request_id":"tu-1789278462202-pfdq"}
+{"tool":"cache.list","input":{"prefix":"results/"},"decision":"allow","request_id":"tu-1789278462425-0f5e"}
+{"tool":"records.get","input":{"path":"vendors/V-105"},"decision":"allow","request_id":"tu-1789278491526-3ojw"}
+{"tool":"records.get","input":{"path":"vendors/V-101"},"decision":"allow","request_id":"tu-1789278491760-q2uh"}

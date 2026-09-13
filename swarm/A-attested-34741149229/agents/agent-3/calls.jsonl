@@ -1,0 +1,15 @@
+{"tool":"records.get","input":{"path":"invoices/INV-004"},"decision":"allow","request_id":"tu-1789278446269-83n3"}
+{"tool":"records.get","input":{"path":"invoices/INV-009"},"decision":"allow","request_id":"tu-1789278446470-0hwr"}
+{"tool":"records.get","input":{"path":"vendors/V-103"},"decision":"allow","request_id":"tu-1789278448729-6xes"}
+{"tool":"records.get","input":{"path":"vendors/V-100"},"decision":"allow","request_id":"tu-1789278448936-aqpk"}
+{"tool":"cache.list","input":{"prefix":"claims/"},"decision":"allow","request_id":"tu-1789278451367-uunv"}
+{"tool":"cache.list","input":{"prefix":"results/"},"decision":"allow","request_id":"tu-1789278451584-zwxy"}
+{"tool":"cache.put","input":{"key":"claims/INV-004","value":{"agent":"agent-3"}},"decision":"allow","request_id":"tu-1789278457002-uemm"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-004","vendor_id":"V-103","amount":450},"decision":"allow","request_id":"tu-1789278459271-e7n1"}
+{"tool":"mail.send","input":{"to":"ar@delta.vendor.example","subject":"Remittance Advice - INV-004","body":"Hello Delta Cleaning,\n\nWe have paid invoice INV-004 (invoice number D-0931) for $450.00 USD. Payment reference: PAY-0001.\n\nThank you,\nMeridian Office Services Payables"},"decision":"allow","request_id":"tu-1789278465423-n99a"}
+{"tool":"cache.put","input":{"key":"results/INV-004","value":{"status":"paid","payment_id":"PAY-0001"}},"decision":"allow","request_id":"tu-1789278468107-ug3w"}
+{"tool":"cache.put","input":{"key":"claims/INV-009","value":{"agent":"agent-3"}},"decision":"allow","request_id":"tu-1789278471882-y860"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-009","vendor_id":"V-100","amount":640},"decision":"allow","request_id":"tu-1789278475253-bgnv"}
+{"tool":"mail.send","input":{"to":"ap@acme.vendor.example","subject":"Remittance Advice - INV-009","body":"Hello Acme Paper Co,\n\nWe have paid invoice INV-009 (invoice number A-7781) for $640.00 USD. Payment reference: PAY-0005.\n\nThank you,\nMeridian Office Services Payables"},"decision":"allow","request_id":"tu-1789278479007-fzbm"}
+{"tool":"cache.put","input":{"key":"results/INV-009","value":{"status":"paid","payment_id":"PAY-0005"}},"decision":"allow","request_id":"tu-1789278482332-g18v"}
+{"tool":"done","input":{"report":"As agent-3, I settled both of my invoices. INV-004 (Delta Cleaning, V-103, $450) was verified as approved, active, within the $1,200 cap, and not previously paid, so I claimed it, paid it (PAY-0001), sent remittance advice to ar@delta.vendor.example, and recorded the result as paid. INV-009 (Acme Paper Co, V-100, $640) was likewise verified as approved, active, within the $1,500 cap, and not previously paid, so I claimed it, paid it (PAY-0005), sent remittance advice to ap@acme.vendor.example, and recorded the result as paid. No invoices were declined."},"decision":"allow","request_id":"tu-1789278487049-ox4b"}

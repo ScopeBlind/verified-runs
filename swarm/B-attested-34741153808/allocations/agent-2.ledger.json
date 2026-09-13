@@ -1,0 +1,41 @@
+{
+  "type": "scopeblind.authority_allocation.v1",
+  "version": 1,
+  "allocation_id": "alloc:agent-2:ledger",
+  "parent": {
+    "type": "grant",
+    "id": "grant:desk:ledger",
+    "digest": "242d0791aafe03b051c98fec614cc6b92924373819ddeec950d6636585e5cdc0"
+  },
+  "holder": {
+    "key_id": "holder:78452409ecd1cd49",
+    "verification_key": "2e61007e2b50243e4582d2eb4ac0bf17d5936c186153389a6e7132fedcdb9c28"
+  },
+  "receiver": {
+    "key_id": "receiver:df75cb56405e9165",
+    "verification_key": "e3960b49ac261968a0e568f4d7f89d472690b6d2e79b6fe566f1eccf74c4b5a9"
+  },
+  "amount": 1180,
+  "kinds": [
+    {
+      "action": "pay",
+      "resource": "vendor/approved/*"
+    },
+    {
+      "action": "decline",
+      "resource": "invoice/INV-003"
+    },
+    {
+      "action": "decline",
+      "resource": "invoice/INV-010"
+    }
+  ],
+  "issued_at": "2026-09-13T05:47:26.028Z",
+  "expires_at": "2026-09-13T11:47:25.986Z",
+  "nonce": "90daec7c978c7f0ed9b6e7e818e9b12a",
+  "digest": "800494bdf00cce0fafe142e20b1eae30e3dd405f907006b4b58e15d004c3b4b6",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "50845b644c7de4b081bf4cbb0979d856cf9d48563f5b3165074e8163a9641f568b076951f1cbc5d0aa6309ff8e0d84ec5c3b8b16a0153b2fa242481d334d5907"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "type": "scopeblind.authority_allocation.v1",
+  "version": 1,
+  "allocation_id": "alloc:agent-4:records",
+  "parent": {
+    "type": "grant",
+    "id": "grant:desk:records",
+    "digest": "8a75adf54682e3b8d6f7b9a7cc4d3dbd9d662c3fc68470a9f18aea123f0128f5"
+  },
+  "holder": {
+    "key_id": "holder:edc1f5a9b9d4fc9e",
+    "verification_key": "826bac7f59c2193e39f316c8a2b19db2dd2763f16a54e355c14f6fef61bbf777"
+  },
+  "receiver": {
+    "key_id": "receiver:17c606f295b0b6d1",
+    "verification_key": "41016b9a5feb491684ab78ff4c0e05118dfc4992eb6c5c4e9de95754442914b3"
+  },
+  "amount": 40,
+  "kinds": [
+    {
+      "action": "read",
+      "resource": "records/invoices/*"
+    },
+    {
+      "action": "read",
+      "resource": "records/vendors/*"
+    }
+  ],
+  "issued_at": "2026-09-13T05:47:26.055Z",
+  "expires_at": "2026-09-13T11:47:25.986Z",
+  "nonce": "c491e9439af922fc643a3197641afe95",
+  "digest": "bfa8b6cbcf143c2f342decd96cf6a020e4074bf1f052a72d9fd86a6f48754af6",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "ce189779557d16a5ff13ba7d40da52e34ffcdc8901d545db26313d3a65ebfbaa9f6a5b193611f4b130c92009df3a5f5f99eed382d2db61d37670aa08b63b450b"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "type": "scopeblind.run_manifest.v1",
+  "version": 1,
+  "run_id": "run:329f6654280ef2b5",
+  "standard": {
+    "request_id": "pr:84e7fdc455cb5082",
+    "digest": "1a7b9fd0823f976bb9f50a931c1e3bf7de9b0c0f48e574aa369a88dbca5db30b",
+    "recipient_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f",
+    "policy_digest": "sha256:cbdd71633767c6a81c19419a714d594a1450f7e88d82b4ce921b8960c9488b45"
+  },
+  "agent": {
+    "name": "legate-attested-loop",
+    "version": "legate-attested-loop 1.0 (desk tools)",
+    "model": "Qwen/Qwen3.8-27B",
+    "model_route": "cloud-api.near.ai (attested TDX inference)"
+  },
+  "harness": {
+    "name": "legate-swarm-run",
+    "digest": "sha256:ed8ce9fc86ee8c6bda57bd651f01c6cddc61f980cbf88c387628f7ac2877b313",
+    "gateway": "protect-mcp 0.13.3"
+  },
+  "dataset": {
+    "name": "legate-desk-swarm",
+    "revision": "desk-2026-09",
+    "digest": "sha256:abdc49ff1456e47ab477fad57dcc7c96f995dea30f480c3eccce1fe4d6aa7060",
+    "task_count": 1
+  },
+  "environment": {
+    "sandbox": "No shell: the agent acts only through the desk services, in the harness process, behind the receivers",
+    "egress": [
+      "cloud-api.near.ai"
+    ],
+    "model_attestation": {
+      "provider": "near-ai-cloud",
+      "model": "Qwen/Qwen3.8-27B",
+      "reports": [
+        {
+          "digest": "sha256:29966e5c43ec2d1afd6134c44255cddbedbe260911505c9f32e59db716fa6001",
+          "signing_address": "0xdae35b28350786f88afe07019aee6cef513886a8"
+        }
+      ]
+    },
+    "attestation": {
+      "kind": "github-actions-provenance",
+      "reference": "https://github.com/ScopeBlind/verified-runs/actions/runs/34741149229",
+      "digest": "sha256:a7aa8d406951052019c5865e098354210a2d2da3448da9484951dcbc169749e8",
+      "commit": "415f27daabee5dc9da6a2d296c93e648b9753fd9",
+      "workflow": "ScopeBlind/verified-runs/.github/workflows/swarm-run.yml@refs/heads/main"
+    },
+    "note": "Run in GitHub Actions (https://github.com/ScopeBlind/verified-runs/actions/runs/34741149229); member agent-4 (honest) of a swarm run in configuration A."
+  },
+  "gateway": {
+    "key_id": "sb:issuer:DiUA6XT5ch17",
+    "verification_key": "bcebc33989799a0b4b401653406ded0f216a4b74568aeb3cf202d729a6d405b2",
+    "receipt_count": 12,
+    "chain_head": "sha256:da099731b069b4a119d51b6fd7531fe9c43621395aedc1ec4c2d44ff511dbd33",
+    "log_digest": "sha256:0aebc298ed18f38b9e875ce8e0c743eb4002100dc4d83fa6a84f8e65abe56fd2",
+    "calls_digest": "sha256:c09bc5bbb6c981a2bae13024788ec3add5ef5fccb1b62c2afb521eb2f97fa639",
+    "calls_disclosed": true
+  },
+  "model_calls": {
+    "digest": "sha256:5f8cd3f6ee58b6856f6c4f6049e9fad430f2500d2b48cd465072a5d270cda3b0",
+    "count": 8,
+    "disclosed": true
+  },
+  "attempts": [
+    {
+      "model_calls": {
+        "from": 0,
+        "to": 8
+      },
+      "task_id": "desk",
+      "attempt": 1,
+      "started_at": "2026-09-13T05:47:23.396Z",
+      "ended_at": "2026-09-13T05:47:56.598Z",
+      "receipts": {
+        "from": 0,
+        "to": 12
+      },
+      "calls": 12,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "desk outcomes, measured at the receivers by the harness; recomputed by check-swarm.mjs",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:76bb9785d05b53354c0e9524e591593f5858189916c384ba352d1879487b4a3d"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      }
+    }
+  ],
+  "summary": {
+    "tasks": 1,
+    "passed": 1,
+    "failed": 0,
+    "errored": 0,
+    "calls": 12,
+    "refused": 0
+  },
+  "signer": {
+    "name": "Legate swarm-run harness (ephemeral, held by the workflow run)",
+    "key_id": "harness:56462b4ac77f6d0f",
+    "verification_key": "472a791c8ba9ce2b1e3f921c8ed3e3bbc10a5e942cd2a2328ef0831745e6884e"
+  },
+  "issued_at": "2026-09-13T05:49:11.491Z",
+  "nonce": "706b96ee4ae0d2d5b14b53407b2dedbc",
+  "digest": "59ac8ad1ac61e2125138001aeab440b6357d4103383fbcb3fec060b6897aab15",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "3f499ecae5be421389f57bd22fe98f15852ead43786aeb4b29ad79d15f3f561645ec6348f185864c13900d7f335f643cfd0cf7f1ec6f735456f593c1d434f60b"
+  }
+}

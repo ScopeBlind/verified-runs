@@ -1,0 +1,1 @@
+scripted attacker: 9 of 9 steps and 0 of 0 probes as expected

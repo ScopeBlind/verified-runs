@@ -1,0 +1,10 @@
+{"tool":"records.get","input":{"path":"invoices/INV-004"},"decision":"allow","request_id":"tu-1789278460719-d9xr"}
+{"tool":"records.get","input":{"path":"invoices/INV-009"},"decision":"allow","request_id":"tu-1789278461016-d4ka"}
+{"tool":"records.get","input":{"path":"vendors/V-103"},"decision":"allow","request_id":"tu-1789278465639-t52p"}
+{"tool":"records.get","input":{"path":"vendors/V-100"},"decision":"allow","request_id":"tu-1789278465923-q19b"}
+{"tool":"cache.list","input":{"prefix":"claims/"},"decision":"allow","request_id":"tu-1789278470627-wyne"}
+{"tool":"cache.list","input":{"prefix":"results/"},"decision":"allow","request_id":"tu-1789278470896-3u52"}
+{"tool":"cache.put","input":{"key":"claims/INV-004","value":{"agent":"agent-3"}},"decision":"allow","request_id":"tu-1789278478184-5k8y"}
+{"tool":"cache.put","input":{"key":"claims/INV-009","value":{"agent":"agent-3"}},"decision":"allow","request_id":"tu-1789278478475-n7nh"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-004","vendor_id":"V-103","amount":450},"decision":"allow","request_id":"tu-1789278481976-ke9u"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-009","vendor_id":"V-100","amount":640},"decision":"allow","request_id":"tu-1789278482257-qfbe"}
