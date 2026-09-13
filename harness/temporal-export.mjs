@@ -31,7 +31,7 @@ const ev = m.evaluateTemporal(events, { format: temporal.format, rules: temporal
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'policy.dw'), `${temporal.dogwood.policy}\n`);
 writeFileSync(join(out, 'schema.cedarschema'), `${temporal.dogwood.schema}\n`);
-writeFileSync(join(out, 'trace.log'), m.toDogwoodTrace(events));
+writeFileSync(join(out, 'trace.log'), m.toDogwoodTrace(events, { format: temporal.format, rules: temporal.rules }));
 const firing = events.map((e) => ev.results.filter((r) => r.evaluable && r.violations.some((v) => v.event_index === e.index)).map((r) => r.rule.id));
 writeFileSync(join(out, 'expected.txt'), events.map((e, i) => `@${Math.max(0, Math.round((e.at - events[0].at) / 1000))} ${firing[i].length ? firing[i].join(',') : '-'}`).join('\n') + '\n');
 console.log(`exported ${events.length} events, ${temporal.rules.length} rule(s), ${firing.filter((f) => f.length).length} firing event(s) to ${out}`);

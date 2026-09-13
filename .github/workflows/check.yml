@@ -27,3 +27,26 @@ jobs:
               echo "== $d"; node harness/regrade.mjs --run "$d" $sealed --out /tmp/regrade-check.json --sign || exit 1
             fi
           done
+  # The history rules the standard declares are replayed by this verifier from the receipts; the Dogwood reference
+  # interpreter, built from source, replays the same rules over the same events and must agree at every receipt.
+  dogwood-crosscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dogwood
+          key: dogwood-cli-${{ runner.os }}-v1
+      - name: Build the Dogwood reference interpreter
+        run: |
+          if [ ! -x ~/.cargo/bin/dogwood ]; then cargo install --git https://github.com/dogwood-policy/dogwood.git dogwood --locked || cargo install --git https://github.com/dogwood-policy/dogwood.git dogwood; fi
+          ~/.cargo/bin/dogwood --help | head -2
+      - name: Replay the history rules with both interpreters
+        env:
+          DOGWOOD_BIN: /home/runner/.cargo/bin/dogwood
+        run: node harness/check-temporal.mjs

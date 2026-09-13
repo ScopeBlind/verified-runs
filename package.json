@@ -6,7 +6,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "check": "node harness/check-verified-run.mjs runs && node harness/check-verified-run-adversarial.mjs && node harness/check-grading.mjs",
+    "check": "node harness/check-verified-run.mjs runs && node harness/check-verified-run-adversarial.mjs && node harness/check-grading.mjs && node harness/check-temporal.mjs",
     "run:codex": "node harness/verified-run.mjs --agent codex --tasks sealed:task-sets/terminal-bench-4.sealed.json --out runs/local",
     "run:claude": "node harness/verified-run.mjs --agent claude --tasks sealed:task-sets/terminal-bench-4.sealed.json --out runs/local"
   },
