@@ -195,6 +195,9 @@ for (const dir of sampleDirs) {
     if (inHistory) {
       const show = (p) => spawnSync('git', ['-C', web, 'show', `${commit}:${p}`]);
       const h = show('harness/verified-run.mjs'), c = show('verify/legate-run.core.mjs');
+      // The manifest's attestation digest is the digest of the workflow file the run executed under; here it is the file at that commit.
+      const wf = show('.github/workflows/verified-run.yml');
+      if (wf.status === 0) ok(`the attestation digest the manifest records is the digest of the workflow file at the attested commit ${commit.slice(0, 12)}`, `sha256:${sha256Bytes(wf.stdout)}` === att.digest);
       if (h.status === 0 && c.status === 0) {
         const pin = `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-verified-run', files: [{ name: 'verified-run.mjs', sha256: sha256Bytes(h.stdout) }, { name: 'legate-run.core.mjs', sha256: sha256Bytes(c.stdout) }] }))}`;
         ok(`the harness the manifest pins is the harness the repository held at the attested commit ${commit.slice(0, 12)}`, pin === manifest.harness.digest);

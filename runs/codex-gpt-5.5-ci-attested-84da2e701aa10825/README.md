@@ -41,6 +41,6 @@ Result: 4 of 4 passed; 27 governed calls, 4 refused
 - That the verdicts are more than the harness's word: no second grading is supplied. The archived workspace and the pinned tests let anyone make one.
 - What the agent said or reasoned: the receipts record tool calls and the harness records test verdicts, not the transcript.
 
-Verify offline: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl`, or drop the three files on legate.scopeblind.com/verify.
+Verify offline, inside this folder: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl --calls calls.jsonl --regrade regrade.json --provenance provenance` (from @veritasacta/verify 0.10.11 the exit status is 0 only when the run binds to everything given; add `--maintainer-key maintainer-key.json` from the repository root to pin the maintainer key), or drop the files together on legate.scopeblind.com/verify.
 
 Removing a receipt from the front leaves a dangling link, which the verifier reports; removing one from the end changes the head and the count the manifest pins; a chain re-signed from scratch needs the keys, which is why the standard names them and why demonstration keys prove the mechanism only. A receipt records the call the gate saw, not what the call did: open calls.jsonl for that, and the workspace archive for what was left behind. The verdicts are the harness's own test run until a second grading reconciles them.

@@ -35,4 +35,4 @@ Result: 4 of 4 passed; 18 governed calls, 0 refused
 - Who holds the harness key or the gateway key: pin them through a channel you already trust.
 - What the agent said or reasoned: the receipts record tool calls and the harness records test verdicts, not the transcript.
 
-Verify offline: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl`, or drop the three files on legate.scopeblind.com/verify.
+Verify offline, inside this folder: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl --provenance provenance` (from @veritasacta/verify 0.10.11 the exit status is 0 only when the run binds to everything given; add `--maintainer-key maintainer-key.json` from the repository root to pin the maintainer key), or drop the files together on legate.scopeblind.com/verify.

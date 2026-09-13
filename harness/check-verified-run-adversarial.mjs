@@ -183,4 +183,19 @@ if (baseModelCalls && baseModelAttestations) {
     passed++; console.log('  ✓ caught: a grading made elsewhere with a verdict flipped without re-signing (regrade_2)');
   }
 }
+
+// The policy digest is recomputed from the policy text: a standard whose text was edited and re-signed under the same
+// (demonstration) maintainer key, keeping the declared digest, verifies as a standard and still fails the gate-policy check.
+if (m.isDemoRecipientKey(standard.recipient.verification_key) && m.isDemoRunSignerKey(manifest.signer.verification_key)) {
+  const maintainer = m.recipientKeyFromSeed('benchmark-maintainer', 'Benchmark maintainer', 'Terminal-Bench (demo)');
+  const draft = clone(standard); for (const k of ['type', 'version', 'request_id', 'recipient', 'issued_at', 'nonce', 'digest', 'signature']) delete draft[k];
+  draft.enforcement = { ...draft.enforcement, policy: `${draft.enforcement.policy}\n// edited after compilation\n` };
+  const resigned = m.createProofRequest(draft, maintainer, new Date(standard.issued_at), { request_id: standard.request_id, nonce: standard.nonce });
+  assert.ok(m.verifyProofRequest(resigned, NOW).cryptographically_valid, 'the re-signed standard should verify as a standard');
+  // The manifest pins the standard by digest, so it is re-signed (demo harness key) to name the re-signed standard; everything else stays.
+  const v = m.verifyRunManifest(resign({ ...manifest, standard: { ...manifest.standard, digest: resigned.digest } }), { standard: resigned, receipts }, NOW);
+  assert.ok(v.checks.some((c) => c.id === 'standard' && c.ok), 'the re-signed manifest should name the re-signed standard');
+  assert.ok(v.checks.some((c) => c.id === 'policy' && !c.ok), 'a policy text that no longer hashes to its declared digest was accepted');
+  passed++; console.log('  ✓ caught: policy text edited and the standard re-signed with the declared digest kept (the digest is recomputed)');
+}
 console.log(`\ncheck-verified-run-adversarial: ${passed} mutations caught`);

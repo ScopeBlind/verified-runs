@@ -36,4 +36,4 @@ Result: 4 of 4 passed; 30 governed calls, 3 refused
 - That the sandbox enforced the declared network rule: this run carries no environment attestation, so egress and model route are the harness's declaration.
 - What the agent said or reasoned: the receipts record tool calls and the harness records test verdicts, not the transcript.
 
-Verify offline: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl`, or drop the three files on legate.scopeblind.com/verify.
+Verify offline, inside this folder: `npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl` (from @veritasacta/verify 0.10.11 the exit status is 0 only when the run binds to everything given; add `--maintainer-key maintainer-key.json` from the repository root to pin the maintainer key), or drop the files together on legate.scopeblind.com/verify.
