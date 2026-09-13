@@ -556,13 +556,11 @@ try {
     }
     if (run.stderr.trim()) console.log(`    agent stderr: ${run.stderr.trim().split('\n').filter((l) => !/^(warning|20\d\d-)/.test(l)).slice(-3).join(' | ').slice(0, 300)}`);
     // The harness runs the task's tests, rebased like the instruction.
-    const testsDir = join(ws, '.legate-tests'); mkdirSync(testsDir);
-    for (const [p, content] of Object.entries(task.files)) if (p.startsWith('tests/')) { const target = join(testsDir, p.slice('tests/'.length)); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, /\.(py|sh|txt|json|yaml|yml|csv|md)$/.test(p) ? content.toString('utf8').replaceAll('/app', join(ws, 'app')) : content); }
-    const py = spawnSync('python3', ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', '-rA', testsDir], { cwd: ws, encoding: 'utf8', timeout: 180_000 });
-    const output = `${py.stdout ?? ''}${py.stderr ?? ''}`;
-    const passed = Number(output.match(/(\d+) passed/)?.[1] ?? 0); const failed = Number(output.match(/(\d+) failed/)?.[1] ?? 0) + Number(output.match(/(\d+) error/)?.[1] ?? 0);
-    const verdict = py.status === 0 && passed > 0 && failed === 0 ? 'pass' : py.status === null ? 'error' : 'fail';
-    const runner = `pytest ${(spawnSync('python3', ['-m', 'pytest', '--version'], { encoding: 'utf8' }).stdout.match(/[\d.]+/) ?? ['?'])[0]}, run by the harness`;
+    // The tests, rebased like the instruction, graded by the hardened runner in the run core (see grade-tests.ts): no conftest, no plugin autoload, an isolated configuration, three views of the result that must agree.
+    const rebasedTests = Object.fromEntries(Object.entries(task.files).filter(([p]) => p.startsWith('tests/')).map(([p, content]) => [p, /\.(py|sh|txt|json|yaml|yml|csv|md)$/.test(p) ? content.toString('utf8').replaceAll('/app', join(ws, 'app')) : content]));
+    const graded = m.gradeWorkspace({ workspace: ws, tests: rebasedTests, timeoutMs: 180_000 });
+    const { output, passed, failed, verdict } = graded; const runner = `${graded.runner}, run by the harness`;
+    const gradingRecord = { profile: graded.grading.profile, hygiene: graded.grading.hygiene, cross_check: { consistent: graded.grading.cross_check.consistent, exit_code: graded.grading.cross_check.exit_code }, sandbox: graded.grading.sandbox, runner: graded.grading.runner };
     const chain = readFileSync(logPath, 'utf8').split('\n').filter(Boolean).slice(from, to).map((l) => JSON.parse(l));
     const refused = chain.filter((r) => (r.payload?.decision ?? r.decision) === 'deny').length;
     // What the agent left in the task directory: every file that is not a placed task file with its original bytes.
@@ -572,7 +570,7 @@ try {
     wsFiles.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const wsDigest = m.workspaceDigest(wsFiles);
     workspaces[task.id] = { type: 'legate.workspace_archive.v1', task_id: task.id, attempt: 1, digest: wsDigest, files: wsFiles };
-    attempts.push({ ...(agent.model_attestation ? { model_calls: { from: modelCallsFrom, to: modelCallRecords.length } } : {}), task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, agent: { exit_code: run.exit_code, timed_out: run.timed_out }, workspace: { digest: wsDigest, file_count: wsFiles.length, disclosed: discloseWorkspace } });
+    attempts.push({ ...(agent.model_attestation ? { model_calls: { from: modelCallsFrom, to: modelCallRecords.length } } : {}), task_id: task.id, attempt: 1, started_at: started.toISOString(), ended_at: ended.toISOString(), receipts: { from, to }, calls: to - from, refused, verdict, tests: { runner, passed, failed, output_digest: m.fileDigest(output) }, grading: gradingRecord, agent: { exit_code: run.exit_code, timed_out: run.timed_out }, workspace: { digest: wsDigest, file_count: wsFiles.length, disclosed: discloseWorkspace } });
     testOutputs[task.id] = output;
     console.log(`    ${verdict}: ${passed} passed, ${failed} failed; ${to - from} governed calls, ${refused} refused; ${Math.round((ended - started) / 1000)} s`);
     if (!keepWorkspace) rmSync(ws, { recursive: true, force: true }); else console.log(`    workspace kept at ${ws}`);

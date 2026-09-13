@@ -132,7 +132,19 @@ if (existsSync(join(dir, 'regrade.json'))) {
     passed++; console.log(`  ✓ caught: ${name} (${failed.slice(0, 3).join(', ')})`);
   };
   caughtRegrade('a regrade verdict flipped without re-signing', (c) => { c.regrade.results[0].verdict = c.regrade.results[0].verdict === 'pass' ? 'fail' : 'pass'; }, /regrade/);
-  caughtRegrade('a regrade signed by the harness key itself, not a second party', (c) => { const { type, version, run_id, manifest_digest, grader, environment, results, regraded_at, nonce } = c.regrade; c.regrade = m.createRunRegrade({ manifest: c.manifest, results, environment }, signer, new Date(regraded_at), { nonce }); }, /regrade/);
+  if (m.isDemoRunSignerKey(manifest.signer.verification_key)) {
+    caughtRegrade('a regrade signed by the harness key itself, not a second party', (c) => { const { environment, results, regraded_at, nonce } = c.regrade; c.regrade = m.createRunRegrade({ manifest: c.manifest, results, environment }, signer, new Date(regraded_at), { nonce }); }, /regrade/);
+  } else {
+    // Under real keys the harness key is not ours to sign with; what can be tried is a grading by a stranger the standard does not name: reported, never binding, and the run is not reconciled by it.
+    const stranger = m.runSignerFromPrivate(new Uint8Array(32).fill(9), 'A stranger');
+    const { environment, results, regraded_at, nonce } = baseRegrade;
+    const strangerRegrade = m.createRunRegrade({ manifest, results, environment }, stranger, new Date(regraded_at), { nonce });
+    const v = m.verifyRunManifest(manifest, { standard, receipts, regrade: strangerRegrade }, NOW);
+    const check = v.checks.find((c) => c.id === 'regrade');
+    assert.ok(check && check.informational && check.ok && /does not name/.test(check.detail), `a stranger's grading should be reported as unnamed: ${JSON.stringify(check)}`);
+    assert.ok(v.binding !== 'bound' && v.checks.some((c) => c.id === 'verdict_evidence' && !c.ok), 'a stranger\'s agreeing grading must not reconcile the verdicts');
+    passed++; console.log('  ✓ caught: a grading by a grader the standard does not name is reported and does not reconcile (verdict_evidence)');
+  }
   caughtRegrade('a regrade for a different manifest', (c) => { c.regrade.manifest_digest = 'e'.repeat(64); }, /regrade/);
 }
 caught('a call hidden by narrowing an attempt\'s receipt range, counts adjusted, re-signed', (c) => { const a = c.manifest.attempts[c.manifest.attempts.length - 1]; a.receipts.to -= 1; a.calls -= 1; c.manifest.summary.calls -= 1; c.manifest = resign(c.manifest); }, /attempts_cover_chain/);
