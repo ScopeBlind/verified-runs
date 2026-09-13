@@ -1,0 +1,49 @@
+{
+  "type": "scopeblind.authority_allocation.v1",
+  "version": 1,
+  "allocation_id": "alloc:agent-1:cache",
+  "parent": {
+    "type": "grant",
+    "id": "grant:desk:cache",
+    "digest": "02141946ef59e2793b0c9b73306858bff0730d60e619a6ac3f7710f6407042d7"
+  },
+  "holder": {
+    "key_id": "holder:a05ccaed563e60b8",
+    "verification_key": "a652acae916d2017dfa9ddf214b15a0239fcdbec931383514743f82a9e726b2f"
+  },
+  "receiver": {
+    "key_id": "receiver:f58c0ffdd194347a",
+    "verification_key": "feff5adf0331ded511ba8f5b55ea7b69ffe2c74d33785229b9032f11caa365fa"
+  },
+  "amount": 24,
+  "kinds": [
+    {
+      "action": "write",
+      "resource": "cache/claims/INV-001"
+    },
+    {
+      "action": "write",
+      "resource": "cache/results/INV-001"
+    },
+    {
+      "action": "write",
+      "resource": "cache/claims/INV-002"
+    },
+    {
+      "action": "write",
+      "resource": "cache/results/INV-002"
+    },
+    {
+      "action": "write",
+      "resource": "cache/notes/agent-1/*"
+    }
+  ],
+  "issued_at": "2026-09-13T06:08:32.688Z",
+  "expires_at": "2026-09-13T12:08:32.652Z",
+  "nonce": "b30d4a40e1d58e4c1a7d23a57ef25932",
+  "digest": "efe0c7bee59a264797f8de1ed799412d201374c54b8e7ec897facc6bb2c4154e",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "71bb9982a5cf8692c280f7b92e6cf51909b4e0227d8d478713c0dad5efebde574fd713f3f35f370b276433428ba813007e00015afaf97dbbeb58d1d8fbc44700"
+  }
+}

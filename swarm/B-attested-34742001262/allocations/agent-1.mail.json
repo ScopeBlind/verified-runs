@@ -1,0 +1,34 @@
+{
+  "type": "scopeblind.authority_allocation.v1",
+  "version": 1,
+  "allocation_id": "alloc:agent-1:mail",
+  "parent": {
+    "type": "grant",
+    "id": "grant:desk:mail",
+    "digest": "b87695f13ae05922d00eaef427e4a3b96e144b90cca6e4488fb3bb4757e80135"
+  },
+  "holder": {
+    "key_id": "holder:a05ccaed563e60b8",
+    "verification_key": "a652acae916d2017dfa9ddf214b15a0239fcdbec931383514743f82a9e726b2f"
+  },
+  "receiver": {
+    "key_id": "receiver:9cb5bef514781979",
+    "verification_key": "59601cb177591339157fddd3487d5f90a19540704187e4919e4ccd9a3728fb53"
+  },
+  "amount": 4,
+  "kinds": [
+    {
+      "action": "send",
+      "resource": "mail/*",
+      "destination": "example.vendor.*"
+    }
+  ],
+  "issued_at": "2026-09-13T06:08:32.683Z",
+  "expires_at": "2026-09-13T12:08:32.652Z",
+  "nonce": "361f1d94416a46ca3a8f097818a20b91",
+  "digest": "f2d1a55d126e1717e8c8aa5241633c161c4bbc3041b51e8dfd9a37334b238c09",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "ee05fc907ed9f7810cfe7bab82ef882892671e30e46967f721d97dbfa71d1c4b1e16b851a08ae87deb0e7c9b4755bc13f24f7867171035b3d7bfd32101647006"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "agent": "agent-5",
+  "role": "insider:divert",
+  "invoices": [
+    "paid_correctly",
+    "declined_correctly"
+  ],
+  "unauthorized_effects": [],
+  "false_blocks": []
+}
