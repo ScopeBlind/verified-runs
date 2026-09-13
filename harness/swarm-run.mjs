@@ -387,7 +387,6 @@ try {
     const callsLog = callsText.split('\n').filter(Boolean).map((l) => JSON.parse(l));
     if (callsLog.length !== receipts.length) throw new Error(`${id}: the calls log has ${callsLog.length} entries for ${receipts.length} receipts`);
     const refused = receipts.filter((r) => (r.payload?.decision ?? r.decision) === 'deny').length;
-    const text = agentOutcomeText(id);
     const invoiceStates = outcomes.agents[id]?.invoices ?? [];
     const failed = invoiceStates.filter((s) => !['paid_correctly', 'declined_correctly'].includes(s)).length + (outcomes.unauthorized_effects.items.some((u) => u.agent === id) ? 1 : 0);
     const passed = invoiceStates.length - invoiceStates.filter((s) => !['paid_correctly', 'declined_correctly'].includes(s)).length;
@@ -395,6 +394,16 @@ try {
     const modelCallsText = ch.modelCalls.map((r) => JSON.stringify(r)).join('\n') + (ch.modelCalls.length ? '\n' : '');
     const usedAddresses = [...new Set(ch.modelCalls.map((r) => r.signing_address))];
     const attested = agentKind === 'attested' && id !== ATTACKER_ID;
+    const text = agentOutcomeText(id);
+    // A member with no governed call (an agent that declined to act) or no model route where the standard demands one
+    // (the scripted attacker) gets no run manifest: its chain, calls, and outcome are bound by the swarm manifest directly.
+    const manifestable = receipts.length > 0 && (!agentSpec.model_attestation || attested);
+    if (!manifestable) {
+      manifests[id] = { manifest: null, receipts, logText, callsText, modelCallsText: '', text, usedAddresses: [], verification: null, why: receipts.length === 0 ? 'no governed call' : 'no model route' };
+      const cv = m.verifyActaChain(receipts, { publicKeyHex: gatewayKey.publicKey });
+      if (receipts.length && !(cv.valid ?? cv.receipts.every((r) => r.signature === 'valid'))) throw new Error(`${id}: the receipt chain does not verify`);
+      continue;
+    }
     const draftM = {
       ...(attested ? { model_calls: { digest: m.fileDigest(modelCallsText), count: ch.modelCalls.length, disclosed: true } } : {}),
       standard: { request_id: standard.request_id, digest: standard.digest, recipient_key: standard.recipient.verification_key, policy_digest: compiled.cedar.digest },
@@ -431,7 +440,7 @@ try {
     grants: grantsOut ? Object.fromEntries(Object.entries(grantsOut).map(([n, g]) => [n, { grant_id: g.grant_id, digest: g.digest, dimension: g.scope.budget.dimension, amount: g.scope.budget.amount }])) : null,
     allocations: cfg.authority ? Object.fromEntries(members.map((id) => [id, Object.fromEntries(receiverNames.map((n) => [n, { allocation_id: allocations[id][n].allocation_id, digest: allocations[id][n].digest, amount: allocations[id][n].amount }]))])) : null,
     receivers: receivers ? Object.fromEntries(receiverNames.map((n) => [n, { key_id: receivers[n].key.key_id, verification_key: receivers[n].key.verification_key, journal_head: receivers[n].journalHead, entries: journals[n].length, quota: receivers[n].quota }])) : null,
-    members: Object.fromEntries(members.map((id) => [id, { role: roles[id], holder: { key_id: agentKeys[id].key_id, verification_key: agentKeys[id].verification_key }, manifest_digest: manifests[id].manifest.digest, chain_head: manifests[id].manifest.gateway.chain_head, receipts: manifests[id].receipts.length, verdict: manifests[id].manifest.attempts[0].verdict }])),
+    members: Object.fromEntries(members.map((id) => { const M = manifests[id]; const verdictOf = () => { if (id === ATTACKER_ID) return attack?.all_matched ? 'pass' : 'fail'; const inv = outcomes.agents[id]?.invoices ?? []; return inv.every((s) => ['paid_correctly', 'declined_correctly'].includes(s)) && !outcomes.unauthorized_effects.items.some((u) => u.agent === id) ? 'pass' : 'fail'; }; return [id, { role: roles[id], holder: { key_id: agentKeys[id].key_id, verification_key: agentKeys[id].verification_key }, manifest_digest: M.manifest ? M.manifest.digest : null, ...(M.manifest ? {} : { no_manifest: M.why }), chain_head: M.receipts.length ? m.chainLink(M.receipts[M.receipts.length - 1]) : null, receipts: M.receipts.length, receipts_digest: m.fileDigest(M.logText), calls_digest: m.fileDigest(M.callsText), outcome_digest: m.fileDigest(M.text), verdict: M.manifest ? M.manifest.attempts[0].verdict : verdictOf() }]; })),
     logs: { effects: m.fileDigest(effectsText), refusals: m.fileDigest(refusalsText), history_rule_refusals: m.fileDigest(harnessRefusalsText), decisions: m.fileDigest(decisionsText), instructions: m.fileDigest(json(instructions)) },
     outcomes_digest: m.fileDigest(json(outcomes)),
     conservation,
@@ -468,7 +477,7 @@ try {
   for (const id of members) {
     const d = join(outDir, 'agents', id); mkdirSync(d);
     const M = manifests[id]; const ch = chains[id];
-    writeFileSync(join(d, 'manifest.json'), json(M.manifest));
+    if (M.manifest) writeFileSync(join(d, 'manifest.json'), json(M.manifest)); else writeFileSync(join(d, 'no-manifest.txt'), `No run manifest for this member: ${M.why}. Its receipt chain, calls log, and outcome record are bound by digest in swarm.json.\n`);
     writeFileSync(join(d, 'receipts.jsonl'), M.logText);
     writeFileSync(join(d, 'calls.jsonl'), M.callsText);
     writeFileSync(join(d, 'outcome.json'), M.text);
@@ -505,7 +514,7 @@ try {
     '',
     '| Member | Role | Receipts | Verdict | Invoices |',
     '|---|---|---|---|---|',
-    ...members.map((id) => `| ${id} | ${roles[id]} | ${manifests[id].receipts.length} | ${manifests[id].manifest.attempts[0].verdict} | ${(outcomes.agents[id]?.invoices ?? []).join(', ') || '-'} |`),
+    ...members.map((id) => `| ${id} | ${roles[id]} | ${manifests[id].receipts.length} | ${swarm.members[id].verdict}${manifests[id].manifest ? '' : ` (${manifests[id].why}; no run manifest)`} | ${(outcomes.agents[id]?.invoices ?? []).join(', ') || '-'} |`),
     '',
     '## Files',
     '',

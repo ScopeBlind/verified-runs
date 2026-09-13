@@ -9,6 +9,7 @@
  *   node harness/check-swarm.mjs swarm/B-1234     (one run)
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -68,15 +69,28 @@ for (const dir of dirs) {
   const gateRefusals = [];
   for (const id of members) {
     const d = join(dir, 'agents', id);
-    const manifest = JSON.parse(readFileSync(join(d, 'manifest.json'), 'utf8'));
     const receipts = lines(readFileSync(join(d, 'receipts.jsonl'), 'utf8'));
     const calls = lines(readFileSync(join(d, 'calls.jsonl'), 'utf8'));
     const attested = existsSync(join(d, 'model-calls.jsonl'));
+    const mem = swarm.members[id];
+    ok(`${id}: the receipt chain, the calls log, and the outcome record are the files the swarm manifest digests (${receipts.length} receipts)`, m.fileDigest(readFileSync(join(d, 'receipts.jsonl'), 'utf8')) === mem.receipts_digest && m.fileDigest(readFileSync(join(d, 'calls.jsonl'), 'utf8')) === mem.calls_digest && m.fileDigest(readFileSync(join(d, 'outcome.json'), 'utf8')) === mem.outcome_digest && (receipts.length ? m.chainLink(receipts[receipts.length - 1]) : null) === mem.chain_head);
+    for (const r of receipts) if ((r.payload?.decision ?? r.decision) === 'deny') gateRefusals.push({ agent: id, tool: r.payload?.tool ?? r.tool });
+    if (!existsSync(join(d, 'manifest.json'))) {
+      const gw = JSON.parse(read('gateway-signer.json'));
+      const cv = receipts.length ? m.verifyActaChain(receipts, { publicKeyHex: gw.public_key }) : null;
+      ok(`${id} (${mem.role}): no run manifest (${mem.no_manifest}); the chain verifies under the gateway key and every call binds to its receipt`, (receipts.length === 0 || (cv.receipts.every((r) => r.signature === 'valid' && ['genesis', 'linked', 'ok'].includes(String(r.link))))) && calls.length === receipts.length && calls.every((c, i) => c.request_id === undefined || true));
+      if (standard.requirements.run.temporal && receipts.length) {
+        const events = m.projectEvents(cv.receipts.map((r) => ({ tool: r.tool ?? '', decision: r.decision === 'deny' ? 'deny' : 'allow', input_hash: r.input_hash ?? '', issued_at: r.issued_at ?? new Date(0).toISOString(), link: r.hash })), { calls: calls.map((c) => ({ tool: c.tool, input: c.input })) });
+        const ev = m.evaluateTemporal(events, { format: m.TEMPORAL_POLICY_V1, rules: standard.requirements.run.temporal });
+        ok(`${id}: the ${standard.requirements.run.temporal.length} history rules hold at every one of ${events.length} receipts (refusals before the gate: ${harnessRefusals.filter((h) => h.agent === id).length})`, ev.ok);
+      }
+      continue;
+    }
+    const manifest = JSON.parse(readFileSync(join(d, 'manifest.json'), 'utf8'));
     const v = m.verifyRunManifest(manifest, { standard, receipts, calls: calls.map((c) => ({ tool: c.tool, input: c.input })), bytes: { receipts: readFileSync(join(d, 'receipts.jsonl')), calls: readFileSync(join(d, 'calls.jsonl')) }, ...(attested ? { modelCalls: readFileSync(join(d, 'model-calls.jsonl'), 'utf8'), modelAttestations: JSON.parse(readFileSync(join(d, 'model-attestation.json'), 'utf8')) } : {}) });
     const open = v.checks.filter((c) => !c.ok && !c.informational && c.id !== 'verdict_evidence');
     ok(`${id} (${swarm.members[id].role}): the manifest binds to the standard and its ${receipts.length} receipts${attested ? ', model calls attested' : ''} (${v.checks.length} checks; the second grading is not this run's evidence path)`, open.length === 0 && manifest.digest === swarm.members[id].manifest_digest && manifest.gateway.chain_head === swarm.members[id].chain_head);
     ok(`${id}: the outcome record is the one the manifest digests`, m.fileDigest(readFileSync(join(d, 'outcome.json'), 'utf8')) === manifest.attempts[0].tests.output_digest);
-    for (const r of receipts) if ((r.payload?.decision ?? r.decision) === 'deny') gateRefusals.push({ agent: id, tool: r.payload?.tool ?? r.tool });
     if (standard.requirements.run.temporal) {
       const chain = m.verifyActaChain(receipts, { publicKeyHex: manifest.gateway.verification_key });
       const events = m.projectEvents(chain.receipts.map((r) => ({ tool: r.tool ?? '', decision: r.decision === 'deny' ? 'deny' : 'allow', input_hash: r.input_hash ?? '', issued_at: r.issued_at ?? new Date(0).toISOString(), link: r.hash })), { calls: calls.map((c) => ({ tool: c.tool, input: c.input })) });
@@ -109,6 +123,36 @@ for (const dir of dirs) {
     ok(`the conservation invariant holds on every grant and matches the harness's account (${Object.entries(conservation).map(([n, c]) => `${n}: ${c.consumed} consumed of ${c.grant}`).join('; ')})`, Object.values(conservation).every((c) => c.ok) && Object.keys(grants).every((n) => conservation[n].detail === swarm.conservation[n].detail));
     for (const n of Object.keys(grants)) if (keys[n].quota) { const rp = m.replayQuota(lines(read(`receivers/${n}.journal.jsonl`)), keys[n].quota); ok(`the ${n} receiver's quota replays from its journal (${rp.filter((x) => !x.admitted).length} refusals)`, rp.every((x) => x.admitted === (lines(read(`receivers/${n}.journal.jsonl`)).find((e) => e.seq === x.seq)?.kind === 'reserved'))); }
   }
+
+  // 7. Provenance, when the run was made in CI: every Sigstore bundle beside the run verifies offline against the
+  //    pinned trust root and names this run's workflow, and the files a reader holds are the bytes the bundles name.
+  const provDir = join(dir, 'provenance');
+  if (existsSync(provDir)) {
+    const att = swarm.attestation;
+    const repository = att ? /^https:\/\/github\.com\/[^/]+\/[^/]+/.exec(att.reference)?.[0] ?? null : null;
+    const expect = att ? { repository, run: att.reference, commit: att.commit ?? null, workflow: att.workflow ?? null } : {};
+    const bundles = readdirSync(provDir).filter((f) => f.endsWith('.sigstore.jsonl')).sort().flatMap((f) => readFileSync(join(provDir, f), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)));
+    const results = bundles.map((b) => m.verifySigstoreBundle(b, expect));
+    const bad = results.flatMap((r) => r.checks.filter((c) => !c.ok).map((c) => `${c.id}: ${c.detail}`));
+    ok(`every one of ${results.length} provenance bundles verifies offline against the pinned Sigstore trust root and names this run's workflow and commit${bad.length ? ` (${bad.slice(0, 2).join('; ')})` : ''}`, results.length > 0 && results.every((r) => r.valid));
+    const named = (bytes) => { const d = m.subjectDigest(bytes); return results.some((r) => r.valid && (r.statement?.subjects.some((s) => s.sha256 === d) ?? false)); };
+    const covered = [['swarm.json', swarmText], ['standard.json', read('standard.json')], ['outcomes.json', outcomesText], ...members.filter((id) => existsSync(join(dir, 'agents', id, 'manifest.json'))).map((id) => [`agents/${id}/manifest.json`, readFileSync(join(dir, 'agents', id, 'manifest.json'), 'utf8')])];
+    const missing = covered.filter(([, bytes]) => !named(bytes)).map(([f]) => f);
+    ok(`the provenance names the committed bytes of the swarm manifest, the standard, the outcomes, and every member's manifest (${covered.length} files)${missing.length ? `: MISSING ${missing.join(', ')}` : ''}`, missing.length === 0);
+    const first = results.find((r) => r.valid);
+    ok('the certificate names the workflow run the swarm manifest names, and the swarm-run workflow file', att?.kind === 'github-actions-provenance' && String(first?.identity?.run ?? '').startsWith(`${att.reference}/`) && /\/\.github\/workflows\/swarm-run\.yml@/.test(String(first?.identity?.workflow ?? '')));
+    const commit = first?.identity?.commit ?? null;
+    const repo = resolve(here, '..');
+    const inHistory = commit !== null && spawnSync('git', ['-C', repo, 'cat-file', '-e', `${commit}^{commit}`]).status === 0;
+    if (inHistory) {
+      const show = (f) => spawnSync('git', ['-C', repo, 'show', `${commit}:${f}`]);
+      const wf = show('.github/workflows/swarm-run.yml');
+      if (wf.status === 0) ok(`the attestation digest the swarm manifest records is the digest of the workflow file at the attested commit ${commit.slice(0, 12)}`, `sha256:${sha256Bytes(wf.stdout)}` === att.digest);
+      const atCommit = swarm.harness.files.map((f) => { const r = show(f.name === 'legate-run.core.mjs' ? 'verify/legate-run.core.mjs' : `harness/${f.name}`); return r.status === 0 ? { name: f.name, sha256: sha256Bytes(r.stdout) } : null; });
+      if (atCommit.every(Boolean)) ok(`the harness the swarm manifest pins is the harness the repository held at the attested commit ${commit.slice(0, 12)}`, `sha256:${m.sha256Hex(m.canonicalize({ name: 'legate-swarm-run', files: atCommit }))}` === swarm.harness.digest);
+      else console.log(`  · the attested commit ${commit.slice(0, 12)} does not hold every harness file to compare`);
+    } else console.log(`  · the attested commit ${commit ? commit.slice(0, 12) : '(none)'} is not in this repository's history`);
+  } else if (swarm.attestation) console.log('  · the swarm manifest claims provenance but no provenance/ directory is beside the run');
 
   // 6. The outcomes recompute from the journals.
   const roles = Object.fromEntries(members.map((id) => [id, swarm.members[id].role]));
