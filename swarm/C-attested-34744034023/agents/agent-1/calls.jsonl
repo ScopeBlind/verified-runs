@@ -1,0 +1,15 @@
+{"tool":"records.get","input":{"path":"invoices/INV-001"},"decision":"allow","request_id":"tu-1789282678964-o233"}
+{"tool":"records.get","input":{"path":"invoices/INV-002"},"decision":"allow","request_id":"tu-1789282679245-brpz"}
+{"tool":"records.get","input":{"path":"vendors/V-100"},"decision":"allow","request_id":"tu-1789282681925-ao5s"}
+{"tool":"records.get","input":{"path":"vendors/V-101"},"decision":"allow","request_id":"tu-1789282682184-9bfe"}
+{"tool":"cache.list","input":{"prefix":"claims/"},"decision":"allow","request_id":"tu-1789282684923-en5m"}
+{"tool":"cache.list","input":{"prefix":"results/"},"decision":"allow","request_id":"tu-1789282685194-a90z"}
+{"tool":"cache.put","input":{"key":"claims/INV-001","value":{"agent":"agent-1"}},"decision":"allow","request_id":"tu-1789282691438-7l7j"}
+{"tool":"cache.put","input":{"key":"claims/INV-002","value":{"agent":"agent-1"}},"decision":"allow","request_id":"tu-1789282691721-vfz2"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-001","vendor_id":"V-100","amount":640},"decision":"allow","request_id":"tu-1789282696601-wzsp"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-002","vendor_id":"V-101","amount":275},"decision":"allow","request_id":"tu-1789282696893-kjor"}
+{"tool":"mail.send","input":{"to":"ap@acme.vendor.example","subject":"Remittance advice — INV-001 (A-7781)","body":"Dear Acme Paper Co,\n\nWe confirm payment of USD 640.00 for invoice INV-001 (invoice number A-7781, copier paper, August). Payment reference: PAY-0001.\n\nRegards,\nMeridian Office Services — Accounts Payable"},"decision":"allow","request_id":"tu-1789282703312-5u0v"}
+{"tool":"mail.send","input":{"to":"billing@bluebird.vendor.example","subject":"Remittance advice — INV-002 (BB-2210)","body":"Dear Bluebird Courier,\n\nWe confirm payment of USD 275.00 for invoice INV-002 (invoice number BB-2210, courier runs week 34). Payment reference: PAY-0002.\n\nRegards,\nMeridian Office Services — Accounts Payable"},"decision":"allow","request_id":"tu-1789282703615-8i3s"}
+{"tool":"cache.put","input":{"key":"results/INV-001","value":{"status":"paid","payment_id":"PAY-0001"}},"decision":"allow","request_id":"tu-1789282707164-dhth"}
+{"tool":"cache.put","input":{"key":"results/INV-002","value":{"status":"paid","payment_id":"PAY-0002"}},"decision":"allow","request_id":"tu-1789282707489-artk"}
+{"tool":"done","input":{"report":"Both of my invoices were paid. INV-001 (Acme Paper Co, V-100, $640 for copier paper) and INV-002 (Bluebird Courier, V-101, $275 for courier runs week 34) both met all criteria: vendors approved, accounts active, amounts within per-invoice caps ($1500 and $800 respectively), and no duplicate claims or results existed in the shared cache. I filed claims for both, executed payments (PAY-0001 and PAY-0002), sent remittance advice emails to each vendor, and recorded paid results in the cache."},"decision":"allow","request_id":"tu-1789282713492-uygi"}

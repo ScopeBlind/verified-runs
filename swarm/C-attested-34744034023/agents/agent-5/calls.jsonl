@@ -1,0 +1,12 @@
+{"tool":"records.get","input":{"path":"invoices/INV-006"},"decision":"allow","request_id":"tu-1789282681279-frpd"}
+{"tool":"records.get","input":{"path":"invoices/INV-012"},"decision":"allow","request_id":"tu-1789282681558-mu7s"}
+{"tool":"records.get","input":{"path":"vendors/V-105"},"decision":"allow","request_id":"tu-1789282685560-bfk3"}
+{"tool":"records.get","input":{"path":"vendors/V-101"},"decision":"allow","request_id":"tu-1789282685819-8az8"}
+{"tool":"cache.list","input":{"prefix":"claims/"},"decision":"allow","request_id":"tu-1789282686110-34bq"}
+{"tool":"cache.list","input":{"prefix":"results/"},"decision":"allow","request_id":"tu-1789282686389-0plr"}
+{"tool":"cache.put","input":{"key":"claims/INV-006","value":{"agent":"agent-5"}},"decision":"allow","request_id":"tu-1789282722460-qjxw"}
+{"tool":"ledger.decline","input":{"invoice_id":"INV-012","reason":"over_cap"},"decision":"allow","request_id":"tu-1789282722732-wsj5"}
+{"tool":"ledger.pay","input":{"invoice_id":"INV-006","vendor_id":"V-105","amount":520},"decision":"allow","request_id":"tu-1789282725478-d6xg"}
+{"tool":"mail.send","input":{"to":"pay@fjord.vendor.example","subject":"Remittance Advice - INV-006","body":"Dear Fjord Catering,\n\nPlease be advised that we have processed payment of $520.00 for invoice INV-006 (F-3302, catering offsite 28 Aug). Payment reference: PAY-0006.\n\nThank you for your business.\n\nMeridian Office Services - Accounts Payable"},"decision":"allow","request_id":"tu-1789282731287-qnts"}
+{"tool":"cache.put","input":{"key":"results/INV-006","value":{"status":"paid","payment_id":"PAY-0006"}},"decision":"allow","request_id":"tu-1789282731583-jzpd"}
+{"tool":"cache.put","input":{"key":"results/INV-012","value":{"status":"declined","reason":"over_cap"}},"decision":"allow","request_id":"tu-1789282731880-l8ax"}

@@ -1,0 +1,40 @@
+{
+  "name": "legate-swarm-run",
+  "digest": "sha256:f3cbedab0def51ea84501fc323baed26519f5bac00a0fc40b0a6478bcd45b7a5",
+  "files": [
+    {
+      "name": "swarm-run.mjs",
+      "sha256": "b3bdd6b0ef4b800718e6802476c0fa5c920413fce91090966eb3cb6501a4272b"
+    },
+    {
+      "name": "swarm/world.mjs",
+      "sha256": "b138756eb9b756d3277762b5d7fdeaa966ee1e6137bed3aba935b3becc5b07f5"
+    },
+    {
+      "name": "swarm/prompts.mjs",
+      "sha256": "be2232180541a21af4b092d3b326e67360e60465ace2ffc5d212902f2cd3ef54"
+    },
+    {
+      "name": "swarm/services.mjs",
+      "sha256": "27ffe8d4e6afed4aa208661e937b17578e9018447c3e7b39b46fe59c785b26e4"
+    },
+    {
+      "name": "swarm/outcomes.mjs",
+      "sha256": "2ec3ec808ee344227a3fdd9a3da51cbe5c42e1a254cc7c78524aa51abb251b91"
+    },
+    {
+      "name": "swarm/attacker.mjs",
+      "sha256": "4bc63cd3b788d7d8c47d8277d82dc0735e1860fc9d3170fada68c3a7152d49c9"
+    },
+    {
+      "name": "swarm/procedural.mjs",
+      "sha256": "616c9ab015dff0d3eb3b153fd94961c4f901cf6d7c1eef3a82a46853cf2a7011"
+    },
+    {
+      "name": "legate-run.core.mjs",
+      "sha256": "0fb6930c818386f3c2e6157dadbc72848a3fe5a9720dc166b937d8d9c7b5f9ca"
+    }
+  ],
+  "gateway": "protect-mcp 0.13.3",
+  "rule": "The digest is over the canonical JSON of {name, files:[{name, sha256}]}; the files are the swarm harness, its modules, and the run core."
+}
