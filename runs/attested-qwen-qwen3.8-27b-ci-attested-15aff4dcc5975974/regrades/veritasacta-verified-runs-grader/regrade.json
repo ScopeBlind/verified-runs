@@ -1,0 +1,166 @@
+{
+  "type": "scopeblind.run_regrade.v1",
+  "version": 1,
+  "run_id": "run:15aff4dcc5975974",
+  "manifest_digest": "9d17ee7b10d0371eec16f6fe2655e2c81db8952e6a9d0488811c61953612bfe4",
+  "grader": {
+    "name": "VeritasActa verified-runs grader",
+    "key_id": "harness:63a08b7d0e61f9da",
+    "verification_key": "9c67ad58437d476f76b775ea14978a9e86daa1964c8ee047f727a337e369ae97"
+  },
+  "environment": {
+    "independence": {
+      "administered_by": "VeritasActa",
+      "implementation": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox via regrade.mjs (the same runner as the harness)",
+      "test_source": "the benchmark repository at the pinned revision d28711d0da2675d0bb1d56de45ae5df6082438a3",
+      "judgment": "automated: the pinned tests' verdicts, no human review"
+    },
+    "sandbox": "GitHub Actions runner (linux), separate job",
+    "note": "Second grading in https://github.com/VeritasActa/verified-runs-grader/actions/runs/34735779628; the tests were obtained from the benchmark repository at the pinned commit and checked against the pin."
+  },
+  "results": [
+    {
+      "task_id": "hello-world",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:1402e6b690eddb7c913a703fd48abd6f2b78e3590982758bf3bdffd81a41be3d"
+      },
+      "workspace_digest": "sha256:213ef636d20e8bfa623b85f88e0e037e14ffae0dff2f2269da549a2bf5c710d1",
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 0
+        },
+        "sandbox": "none",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox"
+      }
+    },
+    {
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox, regrade",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:3f8c7960d11dadd2ba6b79dfc21b43f471882b094ff42a6eb57dbc741620be86"
+      },
+      "workspace_digest": "sha256:1f67e56d59748bc1d56630384d8469fdf5959fabd1e82f8502be6fbe19b0011b",
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 0
+        },
+        "sandbox": "none",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox"
+      }
+    },
+    {
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox, regrade",
+        "passed": 0,
+        "failed": 1,
+        "output_digest": "sha256:fedc92836d02fc6df1c2b1a8547ace99e4a0b465ab144e135401ebd76452b7c1"
+      },
+      "workspace_digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2",
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 1
+        },
+        "sandbox": "none",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox"
+      }
+    },
+    {
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox, regrade",
+        "passed": 0,
+        "failed": 2,
+        "output_digest": "sha256:7b346e13f8008648f76176cf171f83adf0b5dff768b3adc20cbbf6556de8ce21"
+      },
+      "workspace_digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2",
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 1
+        },
+        "sandbox": "none",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), no sandbox sandbox"
+      }
+    }
+  ],
+  "regraded_at": "2026-09-13T03:33:40.504Z",
+  "nonce": "0db99e3cef9ef45df611a6d128d5282f",
+  "digest": "592e220e629f2ad1d86f2e5efe1cf0e6f8645f0f64ef311d628f1e0d1e0a1b6f",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "18fd75f2da3f60608443ae83d22833997da629824fd743fe6d1d349dcc28dc5b3753e3093297b7fad4c468d0479194b93a915d194b666643a0ec512b5342d409"
+  }
+}
