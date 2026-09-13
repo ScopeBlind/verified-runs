@@ -1,0 +1,7 @@
+{
+  "type": "legate.workspace_archive.v1",
+  "task_id": "bank-trans-filter",
+  "attempt": 1,
+  "digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2",
+  "files": []
+}

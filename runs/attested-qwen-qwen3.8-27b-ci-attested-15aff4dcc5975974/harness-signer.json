@@ -1,0 +1,5 @@
+{
+  "key_id": "harness:b54ed205f44afe80",
+  "public_key": "19a689f353794ece3dda1782e47087238292080221d08f74def214fd9da73c74",
+  "note": "Ephemeral harness key: generated inside this run and held only by the harness process. Real signatures; the provenance binds the manifest it signed to the workflow run."
+}

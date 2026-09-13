@@ -1,0 +1,304 @@
+{
+  "type": "scopeblind.run_manifest.v1",
+  "version": 1,
+  "run_id": "run:15aff4dcc5975974",
+  "standard": {
+    "request_id": "pr:7a1e5b9c3d2f4e60",
+    "digest": "74c8101bc17de2736a1fa7dfa14e742e0080af8bb714e33cbb4870057aa341d1",
+    "recipient_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f",
+    "policy_digest": "sha256:b88a9487c62dbb63db713fecd6b39ceeddba3e54b05dbfb332de26394688374f"
+  },
+  "agent": {
+    "name": "legate-attested-loop",
+    "version": "legate-attested-loop 1.0",
+    "model": "Qwen/Qwen3.8-27B",
+    "model_route": "cloud-api.near.ai (attested TDX inference)"
+  },
+  "harness": {
+    "name": "legate-verified-run",
+    "digest": "sha256:7a7b1378b939d06ac4fba3d11b45c03e21e08dc3aba883816f9062ccda2e1246",
+    "gateway": "protect-mcp 0.13.3"
+  },
+  "dataset": {
+    "name": "terminal-bench/original-tasks",
+    "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+    "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c",
+    "task_count": 4
+  },
+  "environment": {
+    "sandbox": "Linux bubblewrap for tool commands (network disabled); the harness makes the model calls over TLS to the attested provider",
+    "egress": [
+      "cloud-api.near.ai"
+    ],
+    "model_attestation": {
+      "provider": "near-ai-cloud",
+      "model": "Qwen/Qwen3.8-27B",
+      "reports": [
+        {
+          "digest": "sha256:ceec8a45facc4c06cda6caa17b251acf4824623e146dc8bad5fc81178cf5cc64",
+          "signing_address": "0xdae35b28350786f88afe07019aee6cef513886a8"
+        }
+      ]
+    },
+    "attestation": {
+      "kind": "github-actions-provenance",
+      "reference": "https://github.com/ScopeBlind/verified-runs/actions/runs/34735485647",
+      "digest": "sha256:6f08e6a0e68836e5fee0241611af78d917b57d949b7e5ad8b9866d3125db1b61",
+      "commit": "960d08966b265318c6880cfd59f6cdd4cf72350a",
+      "workflow": "ScopeBlind/verified-runs/.github/workflows/verified-run.yml@refs/heads/main"
+    },
+    "note": "Run in GitHub Actions (https://github.com/ScopeBlind/verified-runs/actions/runs/34735485647); the provenance attestations for manifest.json, receipts.jsonl, standard.json, and the second grading are on that run and kept beside it under provenance/, where the verifier consumes them. Task paths were rebased from /app to a workspace and the tests were run with the same rebase."
+  },
+  "gateway": {
+    "key_id": "sb:issuer:BT2BQdndoJ3b",
+    "verification_key": "9b3f4dcc1f0ecc58dafe611524796b65669486336b9732e222af21659d119738",
+    "receipt_count": 16,
+    "chain_head": "sha256:8560e241b8bb48258f3f023752c5c8244768857dfccd9ddb0e386e0d54d516d9",
+    "log_digest": "sha256:17aa9b8c9b25beff0d1f660cf1a21778fa17e54904f1823deacecf5d3aa5b12a",
+    "calls_digest": "sha256:b016b734a2819a464038cdfb4aeba07cb1122b93b0cefdbf78650b1d6755e7fc",
+    "calls_disclosed": true
+  },
+  "model_calls": {
+    "digest": "sha256:687978f5045937c1a9452ad66db69d5500d048fc78fe866696fa7262d3b83ece",
+    "count": 15,
+    "disclosed": true
+  },
+  "attempts": [
+    {
+      "model_calls": {
+        "from": 0,
+        "to": 2
+      },
+      "task_id": "hello-world",
+      "attempt": 1,
+      "started_at": "2026-09-13T03:27:06.814Z",
+      "ended_at": "2026-09-13T03:27:10.951Z",
+      "receipts": {
+        "from": 0,
+        "to": 1
+      },
+      "calls": 1,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:5c85d406d5381138db08fdc26c29de7070d80ce4724caed0208b18cb751a11ff"
+      },
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 0
+        },
+        "sandbox": "bubblewrap",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:213ef636d20e8bfa623b85f88e0e037e14ffae0dff2f2269da549a2bf5c710d1",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 2,
+        "to": 5
+      },
+      "task_id": "countdown-game",
+      "attempt": 1,
+      "started_at": "2026-09-13T03:27:11.478Z",
+      "ended_at": "2026-09-13T03:27:26.789Z",
+      "receipts": {
+        "from": 1,
+        "to": 3
+      },
+      "calls": 2,
+      "refused": 0,
+      "verdict": "pass",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox, run by the harness",
+        "passed": 2,
+        "failed": 0,
+        "output_digest": "sha256:0628aad7059600bbc35cef8972283dd5bfa592c82be43a5786e74b63bd1a0ff4"
+      },
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 0
+        },
+        "sandbox": "bubblewrap",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:1f67e56d59748bc1d56630384d8469fdf5959fabd1e82f8502be6fbe19b0011b",
+        "file_count": 1,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 5,
+        "to": 10
+      },
+      "task_id": "bank-trans-filter",
+      "attempt": 1,
+      "started_at": "2026-09-13T03:27:27.244Z",
+      "ended_at": "2026-09-13T03:29:22.205Z",
+      "receipts": {
+        "from": 3,
+        "to": 11
+      },
+      "calls": 8,
+      "refused": 0,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox, run by the harness",
+        "passed": 0,
+        "failed": 1,
+        "output_digest": "sha256:f5a39c53c81e37bc756399a185bb6756f24d3e0e35aa8d5e9780d2e193138d63"
+      },
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 1
+        },
+        "sandbox": "bubblewrap",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2",
+        "file_count": 0,
+        "disclosed": true
+      }
+    },
+    {
+      "model_calls": {
+        "from": 10,
+        "to": 15
+      },
+      "task_id": "assign-seats",
+      "attempt": 1,
+      "started_at": "2026-09-13T03:29:22.650Z",
+      "ended_at": "2026-09-13T03:30:32.876Z",
+      "receipts": {
+        "from": 11,
+        "to": 16
+      },
+      "calls": 5,
+      "refused": 0,
+      "verdict": "fail",
+      "tests": {
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox, run by the harness",
+        "passed": 0,
+        "failed": 2,
+        "output_digest": "sha256:7a15f36d5234f00c61c741a52a3e17632fa4602a24fc349cc8fe4883290fc7a4"
+      },
+      "grading": {
+        "profile": "black_box",
+        "hygiene": {
+          "checked": [
+            "conftest.py",
+            "pytest.ini",
+            "tox.ini",
+            "setup.cfg",
+            "pyproject.toml",
+            "sitecustomize.py",
+            "usercustomize.py",
+            ".pth"
+          ],
+          "refused": []
+        },
+        "cross_check": {
+          "consistent": true,
+          "exit_code": 1
+        },
+        "sandbox": "bubblewrap",
+        "runner": "pytest 8.4.1, hardened runner (no conftest, no plugin autoload, isolated configuration, user site and cwd off the path, JUnit cross-check), bubblewrap sandbox"
+      },
+      "agent": {
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "workspace": {
+        "digest": "sha256:602e35a92eec4bc0a2ec6ae113f07bfc6933322fb69fe8dee416e5a67217e2a2",
+        "file_count": 0,
+        "disclosed": true
+      }
+    }
+  ],
+  "summary": {
+    "tasks": 4,
+    "passed": 2,
+    "failed": 2,
+    "errored": 0,
+    "calls": 16,
+    "refused": 0
+  },
+  "signer": {
+    "name": "Legate verified-run harness (ephemeral, held by the workflow run)",
+    "key_id": "harness:b54ed205f44afe80",
+    "verification_key": "19a689f353794ece3dda1782e47087238292080221d08f74def214fd9da73c74"
+  },
+  "issued_at": "2026-09-13T03:30:33.385Z",
+  "nonce": "dbdad0054902a9914981a7c242823373",
+  "digest": "9d17ee7b10d0371eec16f6fe2655e2c81db8952e6a9d0488811c61953612bfe4",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "dd0aae45abcda421a51691f5a4538ca139970220537c276a370bf3790d7a5fa53bdd2ba335d1634aa3598c798a9e398363e0c0b9709f127165d8c1d6a03ba30b"
+  }
+}

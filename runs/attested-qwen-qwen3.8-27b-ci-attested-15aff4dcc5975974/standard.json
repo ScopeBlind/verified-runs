@@ -1,0 +1,250 @@
+{
+  "type": "scopeblind.proof_request.v1",
+  "version": 1,
+  "request_id": "pr:7a1e5b9c3d2f4e60",
+  "recipient": {
+    "name": "verified-runs maintainer",
+    "organization": "ScopeBlind",
+    "key_id": "recipient:e1b6a9c5f64f7310",
+    "verification_key": "68d517450a1885865c9f2719df6b9beff19e91b40e5c12c649b3e31626dad00f"
+  },
+  "operator": {
+    "name": "ScopeBlind verified-runs workflow"
+  },
+  "decision": {
+    "kind": "reliance",
+    "owner": "ScopeBlind verified-runs maintainer",
+    "statement": "Rely on this run's score as a verified run of the pinned task set",
+    "purpose": "Leaderboard entry"
+  },
+  "boundary": {
+    "workflow": "Benchmark run",
+    "action_class": "tool_call",
+    "resources": [
+      "the task workspace"
+    ],
+    "destinations": [],
+    "period": {
+      "starts_at": "2026-09-11T00:00:00.000Z",
+      "ends_at": "2027-12-31T00:00:00.000Z"
+    }
+  },
+  "requirements": {
+    "environment_class_min": "sandbox",
+    "approver_assurance_min": "policy_automatic",
+    "human_approval": {
+      "required_above": null,
+      "distinct_approvers": 1
+    },
+    "authority_max_age_seconds": 900,
+    "coverage": "governed_route",
+    "effect_evidence": "independently_reconciled",
+    "anchoring": "self_attested",
+    "partial_settlement_permitted": false,
+    "run": {
+      "allowed_tools": [
+        "Bash"
+      ],
+      "egress_allowlist": [
+        "cloud-api.near.ai"
+      ],
+      "attempts_per_task": 1,
+      "dataset": {
+        "name": "terminal-bench/original-tasks",
+        "revision": "d28711d0da2675d0bb1d56de45ae5df6082438a3",
+        "digest": "sha256:86e96c233772a87a86d9b371e491655ed51d55f6455c5e0ebf2c3f45e9102d3c"
+      },
+      "harness": {
+        "name": "legate-verified-run",
+        "digest": "sha256:7a7b1378b939d06ac4fba3d11b45c03e21e08dc3aba883816f9062ccda2e1246"
+      },
+      "time_limit_seconds": 900,
+      "model_route": "cloud-api.near.ai (attested TDX inference)",
+      "model_attestation": {
+        "provider": "near-ai-cloud",
+        "model": "Qwen/Qwen3.8-27B"
+      },
+      "temporal": [
+        {
+          "id": "calls_per_attempt",
+          "kind": "count_within",
+          "scope": "attempt",
+          "window_seconds": 900,
+          "filter": {
+            "tool": "Bash"
+          },
+          "max": 120,
+          "note": "at most 120 governed calls in one attempt"
+        },
+        {
+          "id": "no_egress_after_secrets",
+          "kind": "forbid_after",
+          "scope": "attempt",
+          "trigger": {
+            "command_like": [
+              "*secret*",
+              "*credential*",
+              "*passwd*",
+              "*api_key*"
+            ]
+          },
+          "forbid": {
+            "command_like": [
+              "*curl *",
+              "*wget *",
+              "*nc *",
+              "*ssh *",
+              "*scp *",
+              "*ftp *"
+            ]
+          },
+          "note": "after a command that touches a secret, no command that reaches the network; the label does not expire"
+        }
+      ]
+    }
+  },
+  "trust": {
+    "accepted_gate_keys": [
+      "9b3f4dcc1f0ecc58dafe611524796b65669486336b9732e222af21659d119738"
+    ],
+    "accepted_approver_keys": [],
+    "accepted_readback_sources": [
+      "19a689f353794ece3dda1782e47087238292080221d08f74def214fd9da73c74",
+      "df5226e53373611b20f0ffa5dcff1495b8126d237ccd58821b411ec0f1bfe45f"
+    ],
+    "accepted_anchor_witnesses": [],
+    "accepted_grader_provenance": [
+      {
+        "kind": "github-actions-provenance",
+        "repository": "https://github.com/ScopeBlind/verified-runs"
+      },
+      {
+        "kind": "github-actions-provenance",
+        "repository": "https://github.com/VeritasActa/verified-runs-grader"
+      }
+    ]
+  },
+  "disclosure": {
+    "required_fields": [
+      "tool calls",
+      "verdicts",
+      "chain head"
+    ],
+    "inspection": "on_request"
+  },
+  "limitations_permitted": [
+    "The agent's own sandbox stands in for the benchmark's Docker image; task paths are rebased from /app to the workspace and the tests are run with the same rebase",
+    "The gate clock is accepted as the dispatch time",
+    "No environment attestation is required for a demonstration run",
+    "Demonstration keys sign the standard, the receipts, the manifest, and the regrade; they prove the mechanism, not identity",
+    "The second grading may run in the same continuous-integration account as the first, under a distinct key and job; a grading by a third party is stronger and the archived workspace makes it possible"
+  ],
+  "rejection_criteria": [
+    "Any tool call not on the allowed list that the gate allowed",
+    "Any gap in the receipt chain",
+    "More than one attempt per task",
+    "Any pass the agent reports that the harness's tests do not reproduce"
+  ],
+  "hold_criteria": [
+    "A harness other than the pinned one",
+    "A run whose environment attestation is missing"
+  ],
+  "deadline": {
+    "respond_by": "2027-12-31T00:00:00.000Z",
+    "evidence_max_age_seconds": 2592000
+  },
+  "consequence": {
+    "if_met": "Listed as a verified run: the score stands on the receipts and the manifest, not on the submitter's word.",
+    "if_not_met": "Listed as unverified, or not listed. No score is taken from this submission.",
+    "not_a_promise": true
+  },
+  "claim_contract_digest": null,
+  "enforcement": {
+    "compiler": "legate-standard-compiler.v1",
+    "policy_format": "cedar",
+    "construction": "acta-policy-digest-v1",
+    "file_name": "standard.cedar",
+    "policy": "// Compiled by legate-standard-compiler.v1 from the signed standard's structured requirements.\n// The standard carries this file's digest (acta-policy-digest-v1). Edit the standard, not this file.\n// Allowed tools: Bash. The name must match exactly. The gate does not read the tool's input.\n// Network, model route, attempts, time, and the task set are not visible here; the environment enforces the first two and the manifest carries the rest.\n\npermit (\n  principal,\n  action == Action::\"MCP::Tool::call\",\n  resource\n) when {\n  resource in [Tool::\"Bash\"]\n};\n\nforbid (\n  principal,\n  action == Action::\"MCP::Tool::call\",\n  resource\n) unless {\n  resource in [Tool::\"Bash\"]\n};\n",
+    "policy_digest": "sha256:b88a9487c62dbb63db713fecd6b39ceeddba3e54b05dbfb332de26394688374f",
+    "action_model": "mcp",
+    "tool": "Bash",
+    "gate_enforced": [
+      "run_tools"
+    ],
+    "not_gate_enforced": [
+      "run_egress",
+      "run_model_route",
+      "run_model_attestation",
+      "run_attempts",
+      "run_time_limit",
+      "run_dataset",
+      "run_harness",
+      "limit_amount",
+      "environment",
+      "coverage",
+      "effect",
+      "anchoring",
+      "disclosure",
+      "payment_controls",
+      "rejection_0_tool_not_listed",
+      "rejection_1_chain_intact",
+      "rejection_2_attempts",
+      "rejection_3_harness_verdict",
+      "hold_0_run_pins",
+      "hold_1"
+    ],
+    "temporal": {
+      "format": "legate-temporal.v1",
+      "rules": [
+        {
+          "id": "calls_per_attempt",
+          "kind": "count_within",
+          "scope": "attempt",
+          "window_seconds": 900,
+          "filter": {
+            "tool": "Bash"
+          },
+          "max": 120,
+          "note": "at most 120 governed calls in one attempt"
+        },
+        {
+          "id": "no_egress_after_secrets",
+          "kind": "forbid_after",
+          "scope": "attempt",
+          "trigger": {
+            "command_like": [
+              "*secret*",
+              "*credential*",
+              "*passwd*",
+              "*api_key*"
+            ]
+          },
+          "forbid": {
+            "command_like": [
+              "*curl *",
+              "*wget *",
+              "*nc *",
+              "*ssh *",
+              "*scp *",
+              "*ftp *"
+            ]
+          },
+          "note": "after a command that touches a secret, no command that reaches the network; the label does not expire"
+        }
+      ],
+      "dogwood": {
+        "policy": "// Generated from a Legate temporal policy (legate-temporal.v1). A base permit, then one forbid per rule, firing at the event that breaks it.\n// Derived predicates carried by the trace (Dogwood compares, it does not pattern-match); each is: the command matches any of the globs.\n//   p_no_egress_after_secrets_trigger := command like \"*secret*\" or \"*credential*\" or \"*passwd*\" or \"*api_key*\"\n//   p_no_egress_after_secrets_forbid := command like \"*curl *\" or \"*wget *\" or \"*nc *\" or \"*ssh *\" or \"*scp *\" or \"*ftp *\"\n@id(\"legate_base_permit\")\npermit (principal, action, resource);\n@id(\"calls_per_attempt\")\nforbid (principal, action == Legate::Action::\"Bash\", resource)\nwhen temporal {\n    exists (n: Long). ((count_within(900s, Legate::Action::\"Bash\"::request{ input.task: context.input.task })) == n && n > 120)\n};\n@id(\"no_egress_after_secrets\")\nforbid (principal, action == Legate::Action::\"Bash\", resource)\nwhen { context.input.p_no_egress_after_secrets_forbid == true }\nwhen temporal {\n    formerly within 86400s Legate::Action::\"Bash\"::request{ input.task: context.input.task, input.p_no_egress_after_secrets_trigger: true }\n};",
+        "schema": "namespace Legate {\n  type CallInput = { command: String, task: String, p_no_egress_after_secrets_trigger: Bool, p_no_egress_after_secrets_forbid: Bool };\n  type SystemContext = { now: datetime };\n  entity Agent;\n  entity Gate;\n  action \"Bash\" appliesTo { principal: [Agent], resource: [Gate], context: { input: CallInput, system: SystemContext } };\n}"
+      },
+      "digest": "sha256:9a56b66610600ae6981971214b8ac9e69e16e771f6b90132ed2abc7bcfcf9dad"
+    }
+  },
+  "issued_at": "2026-09-11T00:00:00.000Z",
+  "expires_at": "2027-12-31T00:00:00.000Z",
+  "nonce": "c0ffee00c0ffee00c0ffee00c0ffee02",
+  "digest": "74c8101bc17de2736a1fa7dfa14e742e0080af8bb714e33cbb4870057aa341d1",
+  "signature": {
+    "algorithm": "Ed25519",
+    "value": "66cddeaf552ada81dc5aa7954909452c8c0e333c603c55e2cc69d29cafa0970e4b241804069476a179af0c1a7dccd8a6d9cedf9a516190f19725fb937d3d6f0e"
+  }
+}

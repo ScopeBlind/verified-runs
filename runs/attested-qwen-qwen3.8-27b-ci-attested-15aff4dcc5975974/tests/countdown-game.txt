@@ -1,0 +1,7 @@
+..                                                                       [100%]
+==================================== PASSES ====================================
+----------- generated xml file: /tmp/legate-grade-4oauPR/result.xml ------------
+=========================== short test summary info ============================
+PASSED .legate-tests/test_outputs.py::test_output_file_exists
+PASSED .legate-tests/test_outputs.py::test_countdown_expression
+2 passed in 0.01s

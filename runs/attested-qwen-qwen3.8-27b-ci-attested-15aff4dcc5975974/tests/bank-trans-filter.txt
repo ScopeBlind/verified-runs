@@ -1,0 +1,23 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________________________ test_equality _________________________________
+
+    def test_equality():
+        """Test to confirm that the filtered transactions match the expected output.
+        """
+        output_path = Path("/tmp/legate-task-bank-trans-filter-8gBqxg/app/data/output.json")
+    
+>       assert output_path.exists(), f"File {output_path} does not exist"
+E       AssertionError: File /tmp/legate-task-bank-trans-filter-8gBqxg/app/data/output.json does not exist
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/legate-task-bank-trans-filter-8gBqxg/app/data/output.json').exists
+
+.legate-tests/test_outputs.py:90: AssertionError
+----------- generated xml file: /tmp/legate-grade-uXmfkc/result.xml ------------
+=========================== short test summary info ============================
+FAILED .legate-tests/test_outputs.py::test_equality - AssertionError: File /tmp/legate-task-bank-trans-filter-8gBqxg/app/data/output.json does not exist
+assert False
+ +  where False = exists()
+ +    where exists = PosixPath('/tmp/legate-task-bank-trans-filter-8gBqxg/app/data/output.json').exists
+1 failed in 0.03s
