@@ -13,7 +13,7 @@
     "swarm:dry": "node harness/swarm-run.mjs --config B --agent scripted --out /tmp/swarm-B"
   },
   "dependencies": {
-    "@veritasacta/verify": "^0.10.13",
+    "@veritasacta/verify": "^0.10.14",
     "esbuild": "^0.25.0",
     "protect-mcp": "^0.13.3"
   },
