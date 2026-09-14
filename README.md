@@ -2,7 +2,7 @@
 
 A benchmark score is a claim by whoever ran it. A verified run is the same score with the evidence attached: files anyone can check offline, with no account and no trust in us.
 
-**The latest run**, [`runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974`](runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974): Qwen 3.8 27B on four public Terminal-Bench tasks, 2 of 4 passed, and the record says so. Every tool call went through the gateway under a signed standard and left a receipt. The model answered inside a confidential machine that signed every call, and that machine's attestation verifies against Intel's root. The standard also carries two history rules (a cap on calls per attempt; no network command after a secret was read); the verifier replays them over the receipt chain, and AWS's Dogwood interpreter, given the same rules and the same events from `temporal/`, agrees at every receipt. The result was graded three times: by the harness through an isolated test runner, by a separate job, and by [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), another organization's workflow. GitHub attests which code produced each file. [See it checked in a browser](https://legate.scopeblind.com/verify?sample=run), or check it yourself:
+**The latest run**, [`runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974`](runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974): Qwen 3.8 27B on four public Terminal-Bench tasks, 2 of 4 passed, and the record says so. Every tool call went through the gateway under a signed standard and left a receipt. The model answered inside a confidential machine that signed every call, and that machine's attestation verifies against Intel's root. The standard also carries two history rules (a cap on calls per attempt; no network command after a secret was read); the verifier replays them over the receipt chain, and AWS's Dogwood interpreter, given the same rules and the same events from `temporal/`, agrees at every receipt. The result was graded three times: by the harness through an isolated test runner, by a separate job, and by [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), another organization's workflow. GitHub attests which code produced each file. [See it checked in a browser](https://scopeblind.com/verify?sample=run), or check it yourself:
 
 ```bash
 cd runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974
@@ -12,7 +12,7 @@ npx @veritasacta/verify manifest.json --standard standard.json --receipts receip
   --model-calls model-calls.jsonl --model-attestation model-attestation.json
 ```
 
-The verifier prints what the files establish and what they do not, check by check. A six-agent adversarial demonstration, three configurations compared on outcomes measured at the services, is [below](#the-adversarial-demonstration-six-agents-one-bounded-allocation-three-configurations). `gh attestation verify manifest.json --owner scopeblind` is an independent path to the provenance. Drop the same files together on [legate.scopeblind.com/verify](https://legate.scopeblind.com/verify) for the same answer in a browser.
+The verifier prints what the files establish and what they do not, check by check. A six-agent adversarial demonstration, three configurations compared on outcomes measured at the services, is [below](#the-adversarial-demonstration-six-agents-one-bounded-allocation-three-configurations). `gh attestation verify manifest.json --owner scopeblind` is an independent path to the provenance. Drop the same files together on [scopeblind.com/verify](https://scopeblind.com/verify) for the same answer in a browser.
 
 ## What a stranger can check
 
@@ -24,7 +24,7 @@ The verifier prints what the files establish and what they do not, check by chec
 | Did it stay within the rules over time? | `standard.json` (`enforcement.temporal`); `receipts.jsonl`; `calls.jsonl`; `temporal/` | Rules over the history, not just each call: at most so many calls per attempt, no network command after a secret was read. The verifier replays each rule over the receipt chain and, when one breaks, names the receipt and the history head at that point. The same rules in Dogwood's formats sit beside the run with the projected trace, and the reference interpreter's replay must agree at every receipt. |
 | Which model answered? | `model-calls.jsonl`, `model-attestation.json` | Every call signed inside the provider's confidential machine; the Intel TDX quote that binds the signing key verified offline against the pinned Intel root. |
 | Was it made the way it says? | `provenance/*.sigstore.jsonl` | GitHub's build provenance for each file, verified offline against the pinned Sigstore trust root: workflow, repository, commit, run, and transparency-log entry. |
-| Whose keys? | `maintainer-key.json`, `grader-key.json` | Published here and on [legate.scopeblind.com/trust](https://legate.scopeblind.com/trust). Gateway and harness keys are generated inside each workflow run and discarded with it; the provenance binds them. |
+| Whose keys? | `maintainer-key.json`, `grader-key.json` | Published here and on [scopeblind.com/how-it-works](https://scopeblind.com/how-it-works#key-custody). Gateway and harness keys are generated inside each workflow run and discarded with it; the provenance binds them. |
 
 ## The runs
 
@@ -138,7 +138,7 @@ Removing a receipt from the front leaves the next one pointing at a predecessor 
 
 ## What a run does not establish
 
-- Who holds the keys. Runs made by the workflow since 12 September 2026 carry a standard signed by the published maintainer key and a second grading by the published grader key (`maintainer-key.json`, `grader-key.json`, also on [legate.scopeblind.com/trust](https://legate.scopeblind.com/trust)); their gateway and harness keys were generated inside the workflow run and discarded with it, and the provenance binds them. Earlier runs use demonstration keys whose seeds are in the open source, and say so; they prove the mechanism, not identity.
+- Who holds the keys. Runs made by the workflow since 12 September 2026 carry a standard signed by the published maintainer key and a second grading by the published grader key (`maintainer-key.json`, `grader-key.json`, also on [scopeblind.com/trust](https://scopeblind.com/trust)); their gateway and harness keys were generated inside the workflow run and discarded with it, and the provenance binds them. Earlier runs use demonstration keys whose seeds are in the open source, and say so; they prove the mechanism, not identity.
 - That the sandbox enforced the network rule. The gateway sees tool calls, not packets. A run made by the workflow carries a provenance attestation that the verifier checks against the pinned Sigstore trust root, so the workflow, the commit, and the run that produced these bytes are established, and what that workflow configured is in the repository at that commit; a run made on a laptop says so and carries none.
 - Anything the agent said or reasoned. The receipts record calls, the harness records verdicts, and the transcript stays with the submitter.
 - That the model was never trained on the tasks. A verified run proves process integrity, not the absence of contamination. Sealed task sets (below) are how a maintainer keeps a held-out set held out while still letting anyone verify a run against it.
@@ -195,7 +195,7 @@ The harness pins the task set (every file in each task directory except the refe
 
 Every run pins the harness and the run core that made it. When those change, the bytes a run pins stay in the repository under `harness/harness-versions/<pin>/`, so a reader can always open exactly what ran; the check refuses a run whose pinned harness is neither current nor archived.
 
-`verify/legate-run.core.mjs` is built from the Legate site's own source and vendored here with its digest; `harness.json` in every run records the digest of the harness file and the core together, and the standard pins it. The verifier is [`@veritasacta/verify`](https://www.npmjs.com/package/@veritasacta/verify), Apache-2.0. The gateway is protect-mcp, MIT.
+`verify/legate-run.core.mjs` is built from the ScopeBlind site's own source (the same code its verify page runs) and vendored here with its digest; `harness.json` in every run records the digest of the harness file and the core together, and the standard pins it. The verifier is [`@veritasacta/verify`](https://www.npmjs.com/package/@veritasacta/verify), Apache-2.0. The gateway is protect-mcp, MIT.
 
 ## License
 
