@@ -171,6 +171,14 @@ node harness/regrade.mjs --run runs/<run> --sealed task-sets/terminal-bench-4.se
 
 Rebuilds each task directory from the archive the manifest pins, obtains the pinned tests (from the sealed archive with `SEALED_TASKS_KEY`, or from the benchmark repository at the pinned commit) and checks them against the pin, runs pytest, compares every verdict with the manifest's, and with `--sign` writes `regrade.json` under the grader key. The check workflow does this for every committed run whose workspaces are published.
 
+## Independent graders
+
+A grading counts as a second opinion when the standard names the repository whose workflow made it, under `trust.accepted_grader_provenance`. Two are named for every run made from now on: [VeritasActa/verified-runs-grader](https://github.com/VeritasActa/verified-runs-grader), the template, and [arian-gogani/verified-runs-grader](https://github.com/arian-gogani/verified-runs-grader), the first fork under an organization this maintainer does not administer. The fork's workflow and grading script are byte-identical to the template's.
+
+The fork's first grading, of `attested-qwen-qwen3.8-27b-ci-attested-ac952151a1c59a40` ([workflow run](https://github.com/arian-gogani/verified-runs-grader/actions/runs/34767234038)), agreed with the run's manifest and with the template's grading on all four attempts. It is adopted under that run's `regrades/arian-gogani-verified-runs-grader/` with its provenance bundle. Because that run's standard was signed before the fork was named, the verifier reports the grading as one the standard did not choose, which is the correct reading: a standard cannot accept a grader retroactively, and the agreement stands on its own.
+
+To become one: fork the template, run its workflow on any run here, and open an issue naming the fork. A fresh fork registers no workflows until its first push, so if `gh workflow run` says the workflow is not found on the default branch while the file is there, push an empty commit first.
+
 ## Make a run
 
 ```bash
