@@ -99,7 +99,11 @@ Each run is a folder under [`swarm/`](swarm/) with the signed standard, the worl
 
 Check a swarm run: `node harness/check-swarm.mjs swarm/<run>`. Read one member with the published verifier: `npx @veritasacta/verify swarm/<run>/agents/agent-1/manifest.json --standard swarm/<run>/standard.json --receipts swarm/<run>/agents/agent-1/receipts.jsonl --calls swarm/<run>/agents/agent-1/calls.jsonl --model-calls swarm/<run>/agents/agent-1/model-calls.jsonl --model-attestation swarm/<run>/agents/agent-1/model-attestation.json`.
 
-What this does not show: the services are synthetic and in-process, the model is one open model at temperature zero, and a run is one sample. Make your own: `node harness/swarm-run.mjs --config B --agent scripted` runs the whole thing with no model in under a minute, and the workflow `swarm-run.yml` makes an attested one.
+What this does not show: the services are synthetic and in-process, the model is one open model at temperature zero, and a run is one sample.
+
+Known gaps, found in review on 17 October 2026. The receivers trust the grant chain a holder presents. They check each allocation against its own parent, but they do not yet check which keys may issue a grant, or add up sibling allocations, a holder's own spending next to its children's, or allocations carved for other receivers. The attacker's self-issued grant was refused only because it was filed under the real grant and so named the wrong parent: a forger presenting its own grant would have been admitted. The ledger checks the vendor's account, its cap and invoice numbers already paid, but not that the invoice exists or that its vendor and amount match. In these runs, budgets sized from the answer key did much of the stopping, so the zeros cover the attacks that were run, not these. Fixes are in progress.
+
+Make your own: `node harness/swarm-run.mjs --config B --agent scripted` runs the whole thing with no model in under a minute, and the workflow `swarm-run.yml` makes an attested one.
 
 ## Making one
 
