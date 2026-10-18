@@ -372,7 +372,7 @@ try {
   let attack = null;
   if (withAttacker) {
     const ch = chains[ATTACKER_ID]; ch.started = new Date();
-    attack = await runAttacker({ agentId: ATTACKER_ID, config, dispatch, world, receivers, grants, m, holder: agentKeys[ATTACKER_ID], now: clock, ownAllocation: allocations[ATTACKER_ID]?.ledger ?? null });
+    attack = await runAttacker({ agentId: ATTACKER_ID, config, dispatch, world, receivers, grants, m, holder: agentKeys[ATTACKER_ID], now: clock, ownAllocations: allocations[ATTACKER_ID] ?? null, memberAllocations: allocations, decisions: services.decisions });
     ch.ended = new Date(); ch.report = `scripted attacker: ${attack.steps.filter((s) => s.matched).length} of ${attack.steps.length} steps and ${attack.probes.filter((p) => p.matched).length} of ${attack.probes.length} probes as expected`; ch.agentExit = { exit_code: 0, timed_out: false };
     console.log(`  attacker: ${attack.all_matched ? 'every step and probe as expected' : 'DEVIATION: ' + attack.steps.filter((s) => !s.matched).map((s) => `${s.id} expected ${s.expected} observed ${s.observed}`).join('; ')}`);
   }
@@ -523,7 +523,7 @@ try {
     '',
     ...(outcomes.unauthorized_effects.count ? ['### Unauthorized effects', '', ...outcomes.unauthorized_effects.items.map((u) => `- ${u.kind} by ${u.agent} (effect ${u.seq}): ${u.detail}`), ''] : ['No unauthorized effect reached a receiver.', '']),
     ...(outcomes.false_blocks.count ? ['### False blocks', '', ...outcomes.false_blocks.items.map((f) => `- ${f.agent}: ${f.request} refused (${f.reason_code}: ${f.reason})`), ''] : []),
-    ...(attack ? ['### The scripted attacker', '', '| Step | Expected | Observed | As expected |', '|---|---|---|---|', ...attack.steps.map((s) => `| ${s.id}${s.times > 1 ? ` (x${s.times})` : ''} | ${s.expected} | ${s.observed}${s.reason_codes.length ? ` (${s.reason_codes.join(', ')})` : ''} | ${s.matched ? 'yes' : 'NO'} |`), ...attack.probes.map((p) => `| ${p.id} (at the ledger receiver) | ${p.expected} | ${p.observed} | ${p.matched ? 'yes' : 'NO'} |`), ''] : []),
+    ...(attack ? ['### The scripted attacker', '', '| Step | Expected | Observed | As expected |', '|---|---|---|---|', ...attack.steps.map((s) => `| ${s.id}${s.times > 1 ? ` (x${s.times})` : ''} | ${s.expected} | ${s.observed}${s.reason_codes.length ? ` (${s.reason_codes.join(', ')})` : ''} | ${s.matched ? 'yes' : 'NO'} |`), ...attack.probes.map((p) => `| ${p.id} (at the ${p.receiver ?? 'ledger'} receiver) | ${p.expected} | ${p.observed}${p.reason_code ? ` (${p.reason_code})` : ''} | ${p.matched ? 'yes' : 'NO'} |`), ''] : []),
     '## Members',
     '',
     '| Member | Role | Receipts | Verdict | Invoices |',

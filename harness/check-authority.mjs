@@ -75,6 +75,23 @@ function ledgerDesk(c) {
   return { world, r, g, desk, agents, services, pay, unauthorized, said };
 }
 
+// A desk of four receivers with the swarm's allocation shapes, for the attacker's probes: one honest member and the attacker.
+function probeDesk(c) {
+  const names = ['records', 'ledger', 'mail', 'cache'];
+  const receivers = Object.fromEntries(names.map((n) => [n, c.receiver(n)]));
+  receivers.records.quota = { window_seconds: 60, max: 20 }; receivers.cache.quota = { window_seconds: 60, max: 20 };
+  const desk = c.key('desk');
+  const wide = { records: [{ action: 'read', resource: 'records/*' }], ledger: PAY, mail: [{ action: 'send', resource: 'mail/*', destination: '*' }], cache: [{ action: 'write', resource: 'cache/*' }] };
+  const grants = Object.fromEntries(names.map((n) => [n, c.grant(receivers[n], 1000, desk, wide[n], n, `grant:desk:${n}`)]));
+  const shape = (id) => ({ records: [40, [{ action: 'read', resource: 'records/invoices/*' }]], ledger: [id === 'attacker' ? 0 : 500, [{ action: 'pay', resource: 'vendor/approved/*' }]], mail: [4, [{ action: 'send', resource: 'mail/*', destination: 'example.vendor.*' }]], cache: [24, [{ action: 'write', resource: `cache/notes/${id}/*` }]] });
+  const allocations = {}; const keys = {};
+  for (const id of ['agent-1', 'attacker']) {
+    keys[id] = c.key(`member:${id}`); allocations[id] = {};
+    for (const n of names) { const [amount, kinds] = shape(id)[n]; const a = c.alloc(grants[n], desk, keys[id], receivers[n], amount, kinds, `alloc:${id}:${n}`); receivers[n].register(grants[n], [a]); allocations[id][n] = a; }
+  }
+  return { receivers, grants, allocations, keys, probe: (attacker) => attacker.runProbes({ agentId: 'attacker', receivers, grants, m: c.m, holder: keys.attacker, now: c.clock, ownAllocations: allocations.attacker, memberAllocations: allocations }) };
+}
+
 const VECTORS = [
   // ── Who may issue a grant ──
   {
@@ -300,15 +317,33 @@ const VECTORS = [
       return { closed: committed === 0 && L.unauthorized().count === 0, observed: `the chain ${c.why(reg)}; ${committed} of 4 payments committed, USD ${usd}; unauthorized effects: ${L.unauthorized().count}` };
     },
   },
+  // ── The attacker's probes ──
+  {
+    hole: '4', title: "the attacker's probes, run by the attacker of each version against its own runtime: is one a forged chain consistent with itself?",
+    run: async (c) => {
+      const D = probeDesk(c);
+      const probes = c.attacker.runProbes ? D.probe(c.attacker) : (await c.attacker.runAttacker({ agentId: 'attacker', config: 'B', dispatch: async () => ({ ok: false, refused: true, reason_code: 'not_dispatched' }), world: null, receivers: D.receivers, grants: D.grants, m: c.m, holder: D.keys.attacker, now: c.clock, ownAllocation: D.allocations.attacker.ledger })).probes;
+      const consistent = probes.find((p) => p.id === 'self_signed_chain');
+      return { closed: Boolean(consistent?.matched), observed: `${probes.length} probes, ${probes.filter((p) => p.matched).length} as expected (${probes.map((p) => `${p.id}: ${p.observed}`).join('; ')}); ${consistent ? `the chain consistent with itself was ${consistent.observed}` : 'none presents a chain consistent with itself'}` };
+    },
+  },
+  {
+    hole: '4', title: "today's probes, at the receivers",
+    run: (c) => {
+      const probes = probeDesk(c).probe(now.attacker);
+      const found = probes.filter((p) => !p.matched);
+      return { closed: probes.length >= 10 && found.length === 0, observed: found.length ? `${found.length} of ${probes.length} probes get through: ${found.map((p) => `${p.id} ${p.observed}`).join('; ')}` : `all ${probes.length} refused, or isolated, as expected` };
+    },
+  },
 ];
 
 let failures = 0; let passed = 0;
 const ok = (name, cond) => { if (cond) { passed++; console.log(`  ✓ ${name}`); } else { failures++; console.log(`  ✗ ${name}`); } };
-const attempt = (v, mods) => { try { return v.run(context(mods)); } catch (err) { return { closed: null, observed: `threw: ${String(err.message).slice(0, 160)}` }; } };
+const attempt = async (v, mods) => { try { return await v.run(context(mods)); } catch (err) { return { closed: null, observed: `threw: ${String(err.message).slice(0, 160)}` }; } };
 
 console.log('The holes, against the receiver that made the published runs and against the current one:');
 for (const v of VECTORS) {
-  const b = attempt(v, before); const a = attempt(v, now);
+  const b = await attempt(v, before); const a = await attempt(v, now);
   ok(`hole ${v.hole}: ${v.title}\n      published runtime: ${b.observed}${b.closed === false ? '' : '  <- expected the hole open here'}\n      now: ${a.observed}${a.closed === true ? '' : '  <- STILL OPEN'}`, b.closed === false && a.closed === true);
 }
 
