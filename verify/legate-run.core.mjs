@@ -6901,8 +6901,9 @@ function verifyCanonical(domain, value, digest, signature, verificationKey) {
 //   registration or a spend that would carve or spend more than a node holds: at every node, consumed + reserved +
 //   allocated to children <= amount;
 // - an allocation is named by its digest, so an allocation that takes another one's id captures none of its spends;
-// - a spend id names one operation across the whole receiver: while it is reserved or committed under one allocation it
-//   is refused under any other, and only live and committed operations are unique, so a released one may be presented again;
+// - a spend id names one operation across the whole receiver: once it is committed under one allocation it is refused
+//   under any other, and a later commit of it elsewhere is released; a reservation does not block other allocations, so a
+//   reservation left open cannot hold an operation hostage, and a released operation may be presented again;
 // - the quota counts every admission in a top-level allocation's subtree (and, with grant_max, in a whole grant's tree),
 //   so carving children adds no requests;
 // - every decision writes exactly one journal entry, the one its journal_head names, so each decision can be checked
@@ -7006,8 +7007,8 @@ var ReceiverRuntime = class _ReceiverRuntime {
   opFor(spend_id, nodeDigest) {
     return (this.ops.get(spend_id) ?? []).find((o) => o.node === nodeDigest) ?? null;
   }
-  liveElsewhere(spend_id, nodeDigest) {
-    return (this.ops.get(spend_id) ?? []).find((o) => o.node !== nodeDigest && (o.state === "reserved" || o.state === "committed")) ?? null;
+  committedElsewhere(spend_id, nodeDigest) {
+    return (this.ops.get(spend_id) ?? []).find((o) => o.node !== nodeDigest && o.state === "committed") ?? null;
   }
   applyEntry(e) {
     if (e.kind === "registered" && e.registered) {
@@ -7147,14 +7148,14 @@ var ReceiverRuntime = class _ReceiverRuntime {
     this.write(this.entryFor("repeated", spend, spend.amount, { note: code }));
     return this.decide(spend, outcome, code, reason, next, not, effect);
   }
-  /** Admit a spend: verify it against its registered allocation, answer a repeated operation the same way, refuse one already live under another allocation, check the expiry, the kind, the quota and what remains, and reserve. */
+  /** Admit a spend: verify it against its registered allocation, answer a repeated operation the same way, refuse one already committed under another allocation, check the expiry, the kind, the quota and what remains, and reserve. */
   admit(spend) {
     const v = this.nodeForSpend(spend);
     if (!v) return this.refuse(spend, "unauthorized", "No allocation by that id and digest is registered here. Register the grant and the allocation chain first.", ["Register the allocation chain, then present the spend again."]);
     const sv = verifySpend(spend, v.doc);
     if (!sv.cryptographically_valid) return this.refuse(spend, "unauthorized", `The spend does not verify against the allocation it names (${sv.detail}).`);
-    const elsewhere = this.liveElsewhere(spend.spend_id, v.digest);
-    if (elsewhere) return this.refuse(spend, "duplicate", `Operation ${spend.spend_id} is already ${elsewhere.state} here under allocation ${elsewhere.allocation_id}. An operation has one effect at this receiver, whichever allocation presents it.`, [], ["Perform the operation again under another allocation: the operation identity belongs to the receiver, not to the allocation."]);
+    const elsewhere = this.committedElsewhere(spend.spend_id, v.digest);
+    if (elsewhere) return this.refuse(spend, "duplicate", `Operation ${spend.spend_id} is already committed here under allocation ${elsewhere.allocation_id}. An operation has one effect at this receiver, whichever allocation presents it.`, [], ["Perform the operation again under another allocation: the operation identity belongs to the receiver, not to the allocation."]);
     const prior = this.opFor(spend.spend_id, v.digest);
     if (prior && prior.state !== "released") {
       if (prior.spend_digest !== spend.digest) return this.refuse(spend, "duplicate", "A different spend already used this spend id. An operation identity names one operation.");
@@ -7191,6 +7192,11 @@ var ReceiverRuntime = class _ReceiverRuntime {
     if (!op) return this.refuse(spend, "not_admitted", "Nothing is reserved under this spend id for this spend; admit first.", ["Present the spend for admission."]);
     if (op.state === "committed") return this.repeat(spend, "committed", "duplicate", "Already committed.", [], [], op.effect);
     if (op.state === "released") return this.refuse(spend, "not_admitted", "This spend was released; it cannot be committed. Present it for admission again.", ["Present the spend for admission again."]);
+    const other = this.committedElsewhere(spend.spend_id, op.node);
+    if (other) {
+      this.write(this.entryFor("released", spend, op.amount, { note: `committed first under ${other.allocation_id}` }));
+      return this.decide(spend, "released", "duplicate", `Released: operation ${spend.spend_id} was committed first under allocation ${other.allocation_id}, and an operation has one effect here. The amount is unspent again.`, [], ["Commit one operation under a second allocation."], null);
+    }
     this.write(this.entryFor("committed", spend, op.amount, { effect }));
     return this.decide(spend, "committed", "ok", `Committed: ${op.amount} consumed.`, [], ["Obtain a second effect from this spend."], effect);
   }
@@ -7342,6 +7348,7 @@ function checkConservation(grant, allocations, receivers) {
     if (b) {
       consumed += b.consumed;
       reserved += b.reserved;
+      if (b.consumed < -EPS || b.reserved < -EPS) violations.push(`allocation ${a.allocation_id} holds a negative balance: ${b.consumed} consumed, ${b.reserved} reserved`);
     }
     const kidsTotal = kids.reduce((n, k) => n + visit(k), 0);
     const mine = a.amount - own - kidsTotal;

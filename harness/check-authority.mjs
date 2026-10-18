@@ -261,6 +261,21 @@ const VECTORS = [
     },
   },
   {
+    hole: '6d', title: 'one operation reserved and left open under one allocation, then committed under another',
+    run: (c) => {
+      const r = c.receiver('ledger'); const desk = c.key('desk'); const hx = c.key('holder-x'), hy = c.key('holder-y');
+      const g = c.grant(r, 2000, desk);
+      const x = c.alloc(g, desk, hx, r, 1000, PAY, 'alloc:x'), y = c.alloc(g, desk, hy, r, 1000, PAY, 'alloc:y');
+      r.register(g, [x]); r.register(g, [y]);
+      const open = c.spend(x, hx, 'pay:V-100:A-7781', 0, PAY_V100);
+      const held = r.admit(open);
+      const paid = r.transact(c.spend(y, hy, 'pay:V-100:A-7781', 640, PAY_V100), () => ({ paid: 640 }));
+      const late = r.commit(open, { paid: 0 });
+      const commits = [paid, late].filter((d) => c.committed(d)).length;
+      return { closed: held.outcome === 'admitted' && c.committed(paid) && commits === 1, observed: `the open reservation ${held.outcome}; the payment under the other allocation ${paid.outcome}; the open one committed later: ${late.outcome} (${late.reason_code}); ${commits} commit${commits === 1 ? '' : 's'} of one operation` };
+    },
+  },
+  {
     hole: '6e', title: 'the journal entry a repeated answer cites, for check-swarm to compare the two',
     run: (c) => {
       const r = c.receiver('ledger'); const desk = c.key('desk');
