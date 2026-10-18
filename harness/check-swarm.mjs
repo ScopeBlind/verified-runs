@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
  * Check a swarm run as a stranger would: every signature, every chain, every
- * pin, the receivers' journals replayed, the conservation invariant, the
- * history rules replayed over every member's chain, and the outcomes
- * recomputed from the journals and compared with what the harness wrote.
+ * pin, the receivers' journals replayed, every registration traced to the
+ * published grant (and, where the receivers pin principals, verified again
+ * under the pin), every receiver decision compared with the journal entry it
+ * cites, the conservation invariant, the history rules replayed over every
+ * member's chain, and the outcomes recomputed from the journals and compared
+ * with what the harness wrote.
  *
  *   node harness/check-swarm.mjs swarm            (every run under the directory)
  *   node harness/check-swarm.mjs swarm/B-1234     (one run)
@@ -108,17 +111,89 @@ for (const dir of dirs) {
     ok('every allocation chains to its grant, is made out to the member and the receiver it names, and is the one the swarm manifest names', members.every((id) => Object.entries(allocations[id]).every(([n, a]) => m.verifyAllocationChain(grants[n], [a]).valid && a.holder.verification_key === swarm.members[id].holder.verification_key && a.receiver.verification_key === swarm.receivers[n].verification_key && a.digest === swarm.allocations[id][n].digest)));
     ok('per grant, the allocations sum to at most the grant', Object.keys(grants).every((n) => members.reduce((s, id) => s + allocations[id][n].amount, 0) <= grants[n].scope.budget.amount));
     const keys = JSON.parse(read('receivers/keys.json'));
+    ok('receivers/keys.json names the receivers, quotas, and pinned principals the swarm manifest names', Object.keys(grants).every((n) => keys[n] && swarm.receivers[n] && keys[n].key_id === swarm.receivers[n].key_id && keys[n].verification_key === swarm.receivers[n].verification_key && JSON.stringify(keys[n].quota ?? null) === JSON.stringify(swarm.receivers[n].quota ?? null) && JSON.stringify(keys[n].principals ?? null) === JSON.stringify(swarm.receivers[n].principals ?? null)));
+    // Receivers that pin principals (runs made from 18 October 2026) say whose grants they accept, and must accept only the desk principal's.
+    const pinned = Object.keys(grants).every((n) => Array.isArray(keys[n].principals));
+    if (pinned) ok('every receiver pins the desk principal and no other key, and every grant names the receiver it is spent at', Object.keys(grants).every((n) => keys[n].principals.length === 1 && keys[n].principals[0].verification_key === swarm.principal.verification_key && grants[n].receiver?.verification_key === keys[n].verification_key));
+    else console.log('  · these receivers pin no principal (made before 18 October 2026): each registration is traced to the published grant instead');
+    const journals = Object.fromEntries(Object.keys(grants).map((n) => [n, lines(read(`receivers/${n}.journal.jsonl`))]));
     const restored = {};
     for (const n of Object.keys(grants)) {
-      const entries = lines(read(`receivers/${n}.journal.jsonl`));
+      const entries = journals[n];
       const store = new m.MemoryJournal(); for (const e of entries) store.append(e);
-      const r = m.ReceiverRuntime.restore({ key_id: keys[n].key_id, verification_key: keys[n].verification_key, priv: new Uint8Array(32), name: `${n} service` }, store);
+      const rkey = { key_id: keys[n].key_id, verification_key: keys[n].verification_key, priv: new Uint8Array(32), name: `${n} service` };
+      // Given the pins, restore() verifies every registration again: its grant signed by a pinned key and naming this receiver, each allocation within its parent, nothing carved past a parent.
+      let r = null; let why = '';
+      try { r = m.ReceiverRuntime.restore(rkey, store, undefined, pinned ? { principals: keys[n].principals } : {}); } catch (err) { why = err.message; }
+      ok(`the ${n} receiver restores from its journal to the head the swarm manifest records (${entries.length} entries)${pinned ? ', every registration verified under the pinned principal' : ''}${why ? `: ${why}` : ''}`, r !== null && r.journalHead === swarm.receivers[n].journal_head && entries.length === swarm.receivers[n].entries);
       restored[n] = r;
-      ok(`the ${n} receiver restores from its journal to the head the swarm manifest records (${entries.length} entries)`, r.journalHead === swarm.receivers[n].journal_head && entries.length === swarm.receivers[n].entries);
     }
-    const decisions = lines(read('receivers/decisions.jsonl'));
-    const heads = new Set(Object.keys(grants).flatMap((n) => lines(read(`receivers/${n}.journal.jsonl`)).map((e) => e.head)));
+    // Every registration descends from the grant published for that receiver, whoever carved it.
+    for (const n of Object.keys(grants)) {
+      const regs = journals[n].filter((e) => e.kind === 'registered');
+      const published = new Set(members.map((id) => allocations[id][n].digest));
+      const descends = regs.every((e) => {
+        const a = e.registered?.allocation;
+        if (!a) return false;
+        if (a.parent.type === 'grant') return a.parent.digest === grants[n].digest && m.verifyAllocation(a, grants[n]).cryptographically_valid && (!e.registered.grant || e.registered.grant.digest === grants[n].digest);
+        return restored[n] !== null && restored[n].registeredAllocations(grants[n].digest).some((x) => x.digest === a.digest);
+      });
+      const carved = regs.filter((e) => !published.has(e.registered?.allocation?.digest)).length;
+      ok(`every one of ${regs.length} registrations at the ${n} receiver descends from the published ${n} grant (${regs.length - carved} the members' published allocations${carved ? `, ${carved} carved by a member from its own, published in the journal` : ''})`, descends && members.every((id) => regs.some((e) => e.registered?.allocation?.digest === allocations[id][n].digest)));
+    }
+    const decisionsText = read('receivers/decisions.jsonl');
+    const decisions = lines(decisionsText);
+    ok('receivers/decisions.jsonl is the file the swarm manifest digests', m.fileDigest(decisionsText) === swarm.logs.decisions);
+    const heads = new Set(Object.keys(grants).flatMap((n) => journals[n].map((e) => e.head)));
     ok(`every one of ${decisions.length} receiver decisions verifies under its receiver's key and cites a journal head that exists`, decisions.every((d) => m.verifyReceiverDecision(d, { receiver_key: keys[Object.keys(keys).find((n) => keys[n].key_id === d.receiver.key_id)]?.verification_key ?? '' }).cryptographically_valid && heads.has(d.journal_head)));
+    // Every decision against the entry it cites, in its own receiver's journal: the same spend and allocation, an outcome
+    // the entry records, the effect committed, and the balances the journal holds at that entry.
+    const KINDS = { admitted: ['reserved', 'repeated'], committed: ['committed', 'repeated'], released: ['released'], refused: ['refused'], unresolved: ['unresolved', 'repeated'] };
+    const mismatches = [];
+    for (const n of Object.keys(grants)) {
+      const entries = journals[n];
+      const at = new Map(entries.map((e, i) => [e.head, i]));
+      const replay = new m.ReceiverRuntime({ key_id: keys[n].key_id, verification_key: keys[n].verification_key, priv: new Uint8Array(32), name: `${n} service` }, new m.MemoryJournal());
+      const balancesAt = [];
+      for (const e of entries) { replay.applyEntry(e); balancesAt.push(e.spend_id ? (e.allocation_digest ? replay.balances(e.allocation_digest) : replay.balances(e.allocation_id)) : null); }
+      for (const d of decisions.filter((x) => x.receiver.verification_key === keys[n].verification_key)) {
+        const i = at.get(d.journal_head);
+        const e = i === undefined ? null : entries[i];
+        const why = (() => {
+          if (!e) return 'cites no entry of its own receiver';
+          if (e.spend_id !== d.spend.id || e.spend_digest !== d.spend.digest || e.allocation_id !== d.allocation_id) return `cites ${e.kind} entry ${e.seq}, which is about another spend`;
+          if (!(KINDS[d.outcome] ?? []).includes(e.kind)) return `says ${d.outcome} over a ${e.kind} entry (${e.seq})`;
+          if ((e.kind === 'refused' || e.kind === 'repeated') && e.note !== d.reason_code) return `says ${d.reason_code} over an entry that records ${e.note}`;
+          if (e.kind === 'committed' && JSON.stringify(e.effect ?? null) !== JSON.stringify(d.effect ?? null)) return `reports an effect the committed entry ${e.seq} does not hold`;
+          if (e.kind === 'repeated' && d.outcome === 'committed') { const c = entries.slice(0, i).reverse().find((x) => x.kind === 'committed' && x.spend_id === e.spend_id && x.spend_digest === e.spend_digest); if (!c || JSON.stringify(c.effect ?? null) !== JSON.stringify(d.effect ?? null)) return `repeats an effect no earlier committed entry holds`; }
+          const b = balancesAt[i] ?? { grant_amount: 0, allocation_amount: 0, consumed: 0, reserved: 0, distributed: 0, remaining: 0 };
+          const off = Object.keys(d.evidence).filter((k) => Math.abs(Number(d.evidence[k]) - Number(b[k] ?? 0)) > 1e-9);
+          if (off.length) return `states ${off.map((k) => `${k} ${d.evidence[k]}`).join(', ')} where the journal holds ${off.map((k) => `${k} ${b[k] ?? 0}`).join(', ')} (entry ${e.seq})`;
+          return null;
+        })();
+        if (why) mismatches.push(`${n} ${d.decision_id} (${d.spend.id}): ${why}`);
+      }
+    }
+    ok(`every one of ${decisions.length} receiver decisions matches the journal entry it cites: the spend, the outcome, the effect, and the balances${mismatches.length ? `: ${mismatches.slice(0, 3).join('; ')}` : ''}`, mismatches.length === 0);
+    // The journal and the published decisions cover each other. In every run, each entry that moved authority (a commit, a
+    // release, an unresolved effect) is cited by exactly one decision, and no entry by two. Where every decision writes an
+    // entry of its own (pinned receivers), every entry is: cited by exactly one decision, or a reservation whose resolution is.
+    {
+      const uncovered = [];
+      const cites = new Map(); for (const d of decisions) cites.set(d.journal_head, (cites.get(d.journal_head) ?? 0) + 1);
+      for (const n of Object.keys(grants)) {
+        const entries = journals[n];
+        entries.forEach((e, i) => {
+          if (e.kind === 'registered') return;
+          const c = cites.get(e.head) ?? 0;
+          if (c === 1) return;
+          if (c === 0 && !pinned && !['committed', 'released', 'unresolved'].includes(e.kind)) return;
+          if (c === 0 && e.kind === 'reserved' && entries.slice(i + 1).some((x) => x.spend_id === e.spend_id && x.spend_digest === e.spend_digest && ['committed', 'released', 'unresolved'].includes(x.kind) && cites.get(x.head) === 1)) return;
+          uncovered.push(`${n} entry ${e.seq} (${e.kind} ${e.spend_id}) ${c ? `cited by ${c} decisions` : 'cited by no decision'}`);
+        });
+      }
+      ok(`${pinned ? 'every journal entry' : 'every commit, release, and unresolved effect in the journals'} is accounted for by exactly one published decision${uncovered.length ? `: ${uncovered.slice(0, 3).join('; ')}` : ''}`, uncovered.length === 0);
+    }
     const conservation = Object.fromEntries(Object.keys(grants).map((n) => [n, m.checkConservation(grants[n], members.map((id) => allocations[id][n]), [restored[n]])]));
     ok(`the conservation invariant holds on every grant and matches the harness's account (${Object.entries(conservation).map(([n, c]) => `${n}: ${c.consumed} consumed of ${c.grant}`).join('; ')})`, Object.values(conservation).every((c) => c.ok) && Object.keys(grants).every((n) => conservation[n].detail === swarm.conservation[n].detail));
     for (const n of Object.keys(grants)) if (keys[n].quota) { const rp = m.replayQuota(lines(read(`receivers/${n}.journal.jsonl`)), keys[n].quota); ok(`the ${n} receiver's quota replays from its journal (${rp.filter((x) => !x.admitted).length} refusals)`, rp.every((x) => x.admitted === (lines(read(`receivers/${n}.journal.jsonl`)).find((e) => e.seq === x.seq)?.kind === 'reserved'))); }
