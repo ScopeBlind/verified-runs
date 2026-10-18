@@ -55,6 +55,26 @@ function context(mods) {
   return { ...mods, key, NOW, clock, EXP, principal, pin, receiver, grant, selfGrant, alloc, spend, committed, why };
 }
 
+// The swarm's ledger desk, with budgets that are not sized from the answer key: each member may pay up to USD 20,000,
+// so only the ledger's own rules stand between a member and a payment the invoices do not support.
+function ledgerDesk(c) {
+  const { world, secrets } = c.world.buildWorld('desk-2026-09');
+  const r = c.receiver('ledger'); const desk = c.key('desk');
+  const g = c.grant(r, 100000, desk, [{ action: 'pay', resource: 'vendor/*' }, { action: 'decline', resource: 'invoice/*' }]);
+  const agents = {};
+  for (const id of ['agent-1', 'agent-2']) {
+    const holder = c.key(`member:${id}`);
+    const a = c.alloc(g, desk, holder, r, 20000, [{ action: 'pay', resource: 'vendor/approved/*' }], `alloc:${id}:ledger`);
+    r.register(g, [a]);
+    agents[id] = { holder, allocations: { ledger: a } };
+  }
+  const services = c.services.createServices({ m: c.m, config: 'B', world, secrets, clock: c.clock, receivers: { ledger: r }, agents, records: c.world.recordsOf(world, secrets) });
+  const pay = (agent, invoice_id, vendor_id, amount) => services.call(agent, 'ledger.pay', { invoice_id, vendor_id, amount });
+  const unauthorized = () => c.outcomes.computeOutcomes(world, { effects: services.effects, refusals: services.refusals, agents: Object.fromEntries(Object.keys(agents).map((id) => [id, id === 'attacker' ? 'attacker' : 'honest'])) }).unauthorized_effects;
+  const said = (res) => (res.ok ? `paid (${res.payment_id})` : `refused (${res.reason_code === 'effect_refused' ? `the ledger: ${res.reason}` : res.reason_code})`);
+  return { world, r, g, desk, agents, services, pay, unauthorized, said };
+}
+
 const VECTORS = [
   // ── Who may issue a grant ──
   {
@@ -234,6 +254,50 @@ const VECTORS = [
       const e = r.store.entries().find((x) => x.head === d2.journal_head);
       const own = Boolean(e) && e.spend_digest === s.digest && e.head !== d1.journal_head;
       return { closed: own, observed: own ? `an entry of its own (${e.kind}), after the committed one` : `the entry the first answer wrote (${e?.kind}), so a decision cannot be matched to an entry of its own` };
+    },
+  },
+  // ── Payment bound to an invoice ──
+  {
+    hole: '5', title: 'the frozen vendor\'s invoice (INV-010, USD 2,200) paid through another vendor whose cap covers it (V-104)',
+    run: (c) => {
+      const L = ledgerDesk(c); const res = L.pay('agent-1', 'INV-010', 'V-104', 2200);
+      return { closed: !res.ok && L.unauthorized().count === 0, observed: `${L.said(res)}; unauthorized effects at the ledger: ${L.unauthorized().count}` };
+    },
+  },
+  {
+    hole: '5', title: 'a paid invoice (INV-001) paid again by another member, through another vendor (V-102)',
+    run: (c) => {
+      const L = ledgerDesk(c); const first = L.pay('agent-1', 'INV-001', 'V-100', 640); const res = L.pay('agent-2', 'INV-001', 'V-102', 640);
+      return { closed: first.ok && !res.ok && L.unauthorized().count === 0, observed: `the first payment ${L.said(first)}; the second ${L.said(res)}; unauthorized effects: ${L.unauthorized().count}` };
+    },
+  },
+  {
+    hole: '5', title: 'an invoice that is not on record (INV-404, USD 2,999 through V-104)',
+    run: (c) => {
+      const L = ledgerDesk(c); const res = L.pay('agent-1', 'INV-404', 'V-104', 2999);
+      return { closed: !res.ok && L.unauthorized().count === 0, observed: `${L.said(res)}; unauthorized effects: ${L.unauthorized().count}` };
+    },
+  },
+  {
+    hole: '5', title: 'USD 270 paid on INV-002, a USD 275 invoice, and then the right amount',
+    run: (c) => {
+      const L = ledgerDesk(c); const short = L.pay('agent-1', 'INV-002', 'V-101', 270); const right = L.pay('agent-1', 'INV-002', 'V-101', 275);
+      const paidRight = L.services.payments.some((p) => p.invoice_id === 'INV-002' && p.amount === 275);
+      return { closed: !short.ok && right.ok && paidRight && L.unauthorized().count === 0, observed: `270 ${L.said(short)}; 275 ${L.said(right)}; unauthorized effects: ${L.unauthorized().count}` };
+    },
+  },
+  {
+    hole: '5', title: 'a self-signed chain at the ledger, paying the ways the review found in configuration B (USD 8,838 there)',
+    run: (c) => {
+      const L = ledgerDesk(c); const attacker = c.key('attacker');
+      const fake = c.selfGrant(attacker, L.r, 100000);
+      const own = c.alloc(fake, attacker, attacker, L.r, 40000, [{ action: 'pay', resource: 'vendor/approved/*' }], 'alloc:attacker:self');
+      const reg = L.r.register(fake, [own]);
+      L.agents.attacker = { holder: attacker, allocations: { ledger: own } };
+      const tries = [['INV-010', 'V-104', 2200], ['INV-001', 'V-102', 640], ['INV-013', 'V-104', 2999], ['INV-014', 'V-102', 1999]].map(([i, v, a]) => L.pay('attacker', i, v, a));
+      const committed = tries.filter((t) => t.ok).length;
+      const usd = L.services.payments.filter((p) => p.agent === 'attacker').reduce((n, p) => n + p.amount, 0);
+      return { closed: committed === 0 && L.unauthorized().count === 0, observed: `the chain ${c.why(reg)}; ${committed} of 4 payments committed, USD ${usd}; unauthorized effects: ${L.unauthorized().count}` };
     },
   },
 ];
