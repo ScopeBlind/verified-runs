@@ -120,7 +120,7 @@ Not fixed yet:
 - The receivers' pins are set by the harness, not read from a key directory each company publishes, and one process still makes every key.
 - A journal carries the digest of each spend, not the spend its holder signed. A stranger can check that a receiver's decisions match its journal, but not that a holder signed each spend in it.
 - For the five runs above, check-swarm requires a decision for every commit and release but not for every entry, because their receivers did not record an entry for every decision.
-- The fixes are in this repository's copy of the run core, ahead of the site's source; see `verify/README.md`.
+- The fixes are in this repository's copy of the run core; see `verify/README.md`.
 
 Make your own: `node harness/swarm-run.mjs --config B --agent scripted` runs the whole thing with no model in under a minute, and the workflow `swarm-run.yml` makes an attested one.
 

@@ -6712,7 +6712,7 @@ function gradeWorkspace(input) {
 }
 
 // src/authority.ts
-// Patched in ScopeBlind/verified-runs on 2026-10-18 (fix/authority-bplus), ahead of the site source; see verify/README.md.
+// Patched in ScopeBlind/verified-runs on 2026-10-18 (fix/authority-bplus); see verify/README.md.
 // The one change in this section: a grant may name the one receiver its authority is spent at, signed with the rest of it.
 var AUTHORITY_GRANT_V1 = "scopeblind.authority_grant.v1";
 var AUTHORITY_ALLOCATION_V1 = "scopeblind.authority_allocation.v1";
@@ -6893,7 +6893,7 @@ function verifyCanonical(domain, value, digest, signature, verificationKey) {
 }
 
 // src/receiver-runtime.ts
-// Patched in ScopeBlind/verified-runs on 2026-10-18 (fix/authority-bplus), ahead of the site source; see verify/README.md.
+// Patched in ScopeBlind/verified-runs on 2026-10-18 (fix/authority-bplus); see verify/README.md.
 // What changed from the build:
 // - register() accepts a grant only from a principal the receiver pins, and only one that names this receiver; every
 //   allocation in the chain must be made out to this receiver too, so a whole tree is spent at one receiver;
