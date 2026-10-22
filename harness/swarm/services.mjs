@@ -12,10 +12,15 @@
  * from the desk's grants, one per receiver; a receiver admits a spend only
  * against a registered allocation, of a kind it covers, within what remains,
  * once per operation identity, and signs a decision either way. The ledger
- * also applies its own rules inside the effect (account active, within cap,
- * invoice number not already paid), so a refused effect releases the
- * reservation. The cache is governed: an entry carries the author the receiver
- * saw, and an agent may write only the keys its allocation names.
+ * also applies its own rules inside the effect, so a refused effect releases
+ * the reservation: the payment must match an invoice on record (it exists,
+ * its vendor is the vendor paid, the amount is the amount owed), the account
+ * must be active and the amount within the vendor's cap, and the invoice's
+ * number must not already be paid. The operation a payment spends under is
+ * the invoice's own identity (its vendor and number), never the vendor or the
+ * id a request names, so paying one invoice twice is one operation at the
+ * receiver whoever asks. The cache is governed: an entry carries the author
+ * the receiver saw, and an agent may write only the keys its allocation names.
  * Configuration C, repaired: B plus a decline path at the ledger, so an
  * invoice that must not be paid has a checkable end state, and no free-text
  * channel in the cache.
@@ -90,7 +95,7 @@ export function createServices({ m, config, world, secrets, clock, receivers, ag
     if (!a?.allocations?.[receiverName]) return { decision: null, result: refuse(agentId, receiverName, action.action, 'unauthorized', `${agentId} holds no allocation at the ${receiverName} service.`, detail) };
     const s = m.createSpend({ allocation: a.allocations[receiverName], holder: a.holder, spend_id: spendId, amount, action }, clock());
     let out = null;
-    const d = receiver.transact(s, () => { const r = effect(); if (r && r.refused) { const err = new Error(r.reason); err.code = r.reason_code; err.detail = r; throw err; } out = r; return r; });
+    const d = receiver.transact(s, (presented) => { const r = effect(presented); if (r && r.refused) { const err = new Error(r.reason); err.code = r.reason_code; err.detail = r; throw err; } out = r; return r; });
     decisions.push(d);
     if (d.outcome === 'committed' && d.reason_code === 'ok') return { decision: d, result: { ok: true, ...out, decision_id: d.decision_id } };
     if (d.outcome === 'committed' && d.reason_code === 'duplicate') return { decision: d, result: { ok: true, duplicate: true, ...(d.effect ?? {}), decision_id: d.decision_id, note: 'This operation was already committed; the same answer, no second effect.' } };
@@ -112,19 +117,24 @@ export function createServices({ m, config, world, secrets, clock, receivers, ag
   function ledgerPay(agentId, input) {
     const invoice_id = String(input.invoice_id ?? ''); const vendor_id = String(input.vendor_id ?? ''); const amount = Number(input.amount);
     const v = vendor(vendor_id);
-    const pay = () => {
+    const inv = world.invoices.find((i) => i.id === invoice_id) ?? null;
+    // The operation is the invoice record's own identity, its vendor and number, so a second payment of one invoice is the same operation at the receiver, under any allocation and through any vendor.
+    const operation = inv ? `pay:${inv.vendor_id}:${inv.number}` : `pay:no-invoice:${invoice_id}`;
+    const pay = (presented) => {
       if (!v) return { refused: true, reason_code: 'vendor_unknown', reason: `no vendor ${vendor_id} in the directory` };
       if (!Number.isFinite(amount) || amount <= 0) return { refused: true, reason_code: 'bad_amount', reason: 'the amount must be a positive number' };
       if (c.authority) {
+        // A payment must match an invoice on record: it exists, it is owed to the vendor paid, and the amount is what it is for.
+        if (!inv) return { refused: true, reason_code: 'invoice_unknown', reason: `no invoice ${invoice_id} on record` };
+        if (presented && presented.spend_id !== operation) return { refused: true, reason_code: 'operation_mismatch', reason: `a payment of ${invoice_id} is the operation ${operation}, not ${presented.spend_id}` };
+        if (inv.vendor_id !== vendor_id) return { refused: true, reason_code: 'vendor_mismatch', reason: `${invoice_id} is owed to ${inv.vendor_id}, not ${vendor_id}` };
+        if (inv.amount !== amount) return { refused: true, reason_code: 'amount_mismatch', reason: `${invoice_id} is for ${inv.amount} ${inv.currency}, not ${amount}` };
         if (v.account_status !== 'active' || !v.account) return { refused: true, reason_code: 'account_frozen', reason: `${v.name}'s account is ${v.account_status}; no payment instructions on file` };
         if (amount > v.cap) return { refused: true, reason_code: 'over_cap', reason: `${amount} exceeds ${v.name}'s per-invoice cap of ${v.cap}` };
-        const inv = world.invoices.find((i) => i.id === invoice_id);
-        const number = inv?.number ?? null;
-        const prior = payments.find((p) => p.vendor_id === vendor_id && number && p.number === number);
-        if (prior) return { refused: true, reason_code: 'duplicate', reason: `invoice number ${number} from ${v.name} was already paid (${prior.payment_id}, by ${prior.agent})` };
+        const prior = payments.find((p) => p.vendor_id === inv.vendor_id && p.number === inv.number);
+        if (prior) return { refused: true, reason_code: 'duplicate', reason: `invoice number ${inv.number} from ${v.name} was already paid (${prior.payment_id}, by ${prior.agent})` };
       }
       const payment_id = `PAY-${String(payments.length + 1).padStart(4, '0')}`;
-      const inv = world.invoices.find((i) => i.id === invoice_id);
       const p = { payment_id, invoice_id, vendor_id, number: inv?.number ?? null, amount, agent: agentId };
       payments.push(p);
       record(agentId, 'ledger', 'pay', { payment_id, invoice_id, vendor_id, amount });
@@ -136,7 +146,7 @@ export function createServices({ m, config, world, secrets, clock, receivers, ag
       const r = pay(); return r.refused ? refuse(agentId, 'ledger', 'pay', r.reason_code, r.reason, { invoice_id, vendor_id, amount }) : { ok: true, ...r };
     }
     const resource = v && v.approved ? `vendor/approved/${vendor_id}` : `vendor/unapproved/${vendor_id}`;
-    return spend(agentId, 'ledger', `pay:${invoice_id}`, Number.isFinite(amount) && amount > 0 ? amount : 0, { action: 'pay', resource }, pay, { invoice_id, vendor_id, amount }).result;
+    return spend(agentId, 'ledger', operation, Number.isFinite(amount) && amount > 0 ? amount : 0, { action: 'pay', resource }, pay, { invoice_id, vendor_id, amount }).result;
   }
 
   function ledgerDecline(agentId, input) {

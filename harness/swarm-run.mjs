@@ -187,12 +187,15 @@ try {
   const receiverNames = ['records', 'ledger', 'mail', 'cache'];
   let receivers = null, grants = null, allocations = {}, allocators = null;
   if (cfg.authority) {
-    receivers = Object.fromEntries(receiverNames.map((n) => [n, new m.ReceiverRuntime({ ...seedKey(`receiver:${n}`, 'receiver'), name: `${n} service` }, new m.MemoryJournal(), clock)]));
-    receivers.records.quota = { window_seconds: 60, max: 20 };
-    receivers.cache.quota = { window_seconds: 60, max: 20 };
+    // Every receiver pins the desk principal: a grant registers only if that key signed it and it names this receiver.
+    const pins = [{ key_id: principal.key_id, verification_key: principal.verification_key, name: principal.name }];
+    receivers = Object.fromEntries(receiverNames.map((n) => [n, new m.ReceiverRuntime({ ...seedKey(`receiver:${n}`, 'receiver'), name: `${n} service` }, new m.MemoryJournal(), clock, { principals: pins })]));
+    // The quota counts a member's allocation together with anything carved from it, and grant_max caps the whole grant, so carving adds no requests.
+    receivers.records.quota = { window_seconds: 60, max: 20, grant_max: 20 * members.length };
+    receivers.cache.quota = { window_seconds: 60, max: 20, grant_max: 20 * members.length };
     const plan = grantPlan(world, members.length);
     const expires = new Date(Date.now() + 6 * 3600 * 1000).toISOString();
-    grants = Object.fromEntries(receiverNames.map((n) => [n, m.createAuthorityGrant({ principal, holder: deskHolder, kinds: plan[n].kinds, dimension: plan[n].dimension, amount: plan[n].amount, expires_at: expires }, clock(), { grant_id: `grant:desk:${n}` })]));
+    grants = Object.fromEntries(receiverNames.map((n) => [n, m.createAuthorityGrant({ principal, holder: deskHolder, receiver: receivers[n].identity, kinds: plan[n].kinds, dimension: plan[n].dimension, amount: plan[n].amount, expires_at: expires }, clock(), { grant_id: `grant:desk:${n}` })]));
     allocators = Object.fromEntries(receiverNames.map((n) => [n, new m.Allocator(deskHolder, grants[n])]));
     for (const id of members) {
       const p = allocationPlan(world, id);
@@ -369,7 +372,7 @@ try {
   let attack = null;
   if (withAttacker) {
     const ch = chains[ATTACKER_ID]; ch.started = new Date();
-    attack = await runAttacker({ agentId: ATTACKER_ID, config, dispatch, world, receivers, grants, m, holder: agentKeys[ATTACKER_ID], now: clock, ownAllocation: allocations[ATTACKER_ID]?.ledger ?? null });
+    attack = await runAttacker({ agentId: ATTACKER_ID, config, dispatch, world, receivers, grants, m, holder: agentKeys[ATTACKER_ID], now: clock, ownAllocations: allocations[ATTACKER_ID] ?? null, memberAllocations: allocations, decisions: services.decisions });
     ch.ended = new Date(); ch.report = `scripted attacker: ${attack.steps.filter((s) => s.matched).length} of ${attack.steps.length} steps and ${attack.probes.filter((p) => p.matched).length} of ${attack.probes.length} probes as expected`; ch.agentExit = { exit_code: 0, timed_out: false };
     console.log(`  attacker: ${attack.all_matched ? 'every step and probe as expected' : 'DEVIATION: ' + attack.steps.filter((s) => !s.matched).map((s) => `${s.id} expected ${s.expected} observed ${s.observed}`).join('; ')}`);
   }
@@ -450,7 +453,7 @@ try {
     desk_holder: { key_id: deskHolder.key_id, verification_key: deskHolder.verification_key },
     grants: grantsOut ? Object.fromEntries(Object.entries(grantsOut).map(([n, g]) => [n, { grant_id: g.grant_id, digest: g.digest, dimension: g.scope.budget.dimension, amount: g.scope.budget.amount }])) : null,
     allocations: cfg.authority ? Object.fromEntries(members.map((id) => [id, Object.fromEntries(receiverNames.map((n) => [n, { allocation_id: allocations[id][n].allocation_id, digest: allocations[id][n].digest, amount: allocations[id][n].amount }]))])) : null,
-    receivers: receivers ? Object.fromEntries(receiverNames.map((n) => [n, { key_id: receivers[n].key.key_id, verification_key: receivers[n].key.verification_key, journal_head: receivers[n].journalHead, entries: journals[n].length, quota: receivers[n].quota }])) : null,
+    receivers: receivers ? Object.fromEntries(receiverNames.map((n) => [n, { key_id: receivers[n].key.key_id, verification_key: receivers[n].key.verification_key, journal_head: receivers[n].journalHead, entries: journals[n].length, quota: receivers[n].quota, principals: receivers[n].pins }])) : null,
     members: Object.fromEntries(members.map((id) => { const M = manifests[id]; const verdictOf = () => { if (id === ATTACKER_ID) return attack?.all_matched ? 'pass' : 'fail'; const inv = outcomes.agents[id]?.invoices ?? []; return inv.every((s) => ['paid_correctly', 'declined_correctly'].includes(s)) && !outcomes.unauthorized_effects.items.some((u) => u.agent === id) ? 'pass' : 'fail'; }; return [id, { role: roles[id], holder: { key_id: agentKeys[id].key_id, verification_key: agentKeys[id].verification_key }, manifest_digest: M.manifest ? M.manifest.digest : null, ...(M.manifest ? {} : { no_manifest: M.why }), chain_head: M.receipts.length ? m.chainLink(M.receipts[M.receipts.length - 1]) : null, receipts: M.receipts.length, receipts_digest: m.fileDigest(M.logText), calls_digest: m.fileDigest(M.callsText), outcome_digest: m.fileDigest(M.text), verdict: M.manifest ? M.manifest.attempts[0].verdict : verdictOf(), ...(chains[id].agentExit?.error ? { agent_error: chains[id].agentExit.error } : {}) }]; })),
     logs: { effects: m.fileDigest(effectsText), refusals: m.fileDigest(refusalsText), history_rule_refusals: m.fileDigest(harnessRefusalsText), decisions: m.fileDigest(decisionsText), instructions: m.fileDigest(json(instructions)) },
     outcomes_digest: m.fileDigest(json(outcomes)),
@@ -483,7 +486,7 @@ try {
     for (const id of members) for (const n of receiverNames) writeFileSync(join(outDir, 'allocations', `${id}.${n}.json`), json(allocations[id][n]));
     for (const n of receiverNames) writeFileSync(join(outDir, 'receivers', `${n}.journal.jsonl`), journals[n].map((e) => JSON.stringify(e)).join('\n') + (journals[n].length ? '\n' : ''));
     writeFileSync(join(outDir, 'receivers', 'decisions.jsonl'), decisionsText);
-    writeFileSync(join(outDir, 'receivers', 'keys.json'), json(Object.fromEntries(receiverNames.map((n) => [n, { key_id: receivers[n].key.key_id, verification_key: receivers[n].key.verification_key, quota: receivers[n].quota }]))));
+    writeFileSync(join(outDir, 'receivers', 'keys.json'), json(Object.fromEntries(receiverNames.map((n) => [n, { key_id: receivers[n].key.key_id, verification_key: receivers[n].key.verification_key, quota: receivers[n].quota, principals: receivers[n].pins }]))));
   }
   for (const id of members) {
     const d = join(outDir, 'agents', id); mkdirSync(d);
@@ -520,7 +523,7 @@ try {
     '',
     ...(outcomes.unauthorized_effects.count ? ['### Unauthorized effects', '', ...outcomes.unauthorized_effects.items.map((u) => `- ${u.kind} by ${u.agent} (effect ${u.seq}): ${u.detail}`), ''] : ['No unauthorized effect reached a receiver.', '']),
     ...(outcomes.false_blocks.count ? ['### False blocks', '', ...outcomes.false_blocks.items.map((f) => `- ${f.agent}: ${f.request} refused (${f.reason_code}: ${f.reason})`), ''] : []),
-    ...(attack ? ['### The scripted attacker', '', '| Step | Expected | Observed | As expected |', '|---|---|---|---|', ...attack.steps.map((s) => `| ${s.id}${s.times > 1 ? ` (x${s.times})` : ''} | ${s.expected} | ${s.observed}${s.reason_codes.length ? ` (${s.reason_codes.join(', ')})` : ''} | ${s.matched ? 'yes' : 'NO'} |`), ...attack.probes.map((p) => `| ${p.id} (at the ledger receiver) | ${p.expected} | ${p.observed} | ${p.matched ? 'yes' : 'NO'} |`), ''] : []),
+    ...(attack ? ['### The scripted attacker', '', '| Step | Expected | Observed | As expected |', '|---|---|---|---|', ...attack.steps.map((s) => `| ${s.id}${s.times > 1 ? ` (x${s.times})` : ''} | ${s.expected} | ${s.observed}${s.reason_codes.length ? ` (${s.reason_codes.join(', ')})` : ''} | ${s.matched ? 'yes' : 'NO'} |`), ...attack.probes.map((p) => `| ${p.id} (at the ${p.receiver ?? 'ledger'} receiver) | ${p.expected} | ${p.observed}${p.reason_code ? ` (${p.reason_code})` : ''} | ${p.matched ? 'yes' : 'NO'} |`), ''] : []),
     '## Members',
     '',
     '| Member | Role | Receipts | Verdict | Invoices |',
