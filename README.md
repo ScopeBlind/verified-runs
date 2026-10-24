@@ -9,7 +9,8 @@ cd runs/attested-qwen-qwen3.8-27b-ci-attested-15aff4dcc5975974
 npx @veritasacta/verify manifest.json --standard standard.json --receipts receipts.jsonl --calls calls.jsonl \
   --regrade regrade.json --regrade regrades/veritasacta-verified-runs-grader/regrade.json \
   --provenance provenance --provenance regrades/veritasacta-verified-runs-grader \
-  --model-calls model-calls.jsonl --model-attestation model-attestation.json
+  --model-calls model-calls.jsonl --model-attestation model-attestation.json \
+  --maintainer-key ../../maintainer-key.json
 ```
 
 The verifier prints what the files establish and what they do not, check by check. A six-agent adversarial demonstration, three configurations compared on outcomes measured at the services, is [below](#the-adversarial-demonstration-six-agents-one-bounded-allocation-three-configurations). `gh attestation verify manifest.json --owner scopeblind` is an independent path to the provenance. Drop the same files together on [scopeblind.com/verify](https://scopeblind.com/verify) for the same answer in a browser.
@@ -24,7 +25,7 @@ The verifier prints what the files establish and what they do not, check by chec
 | Did it stay within the rules over time? | `standard.json` (`enforcement.temporal`); `receipts.jsonl`; `calls.jsonl`; `temporal/` | Rules over the history, not just each call: at most so many calls per attempt, no network command after a secret was read. The verifier replays each rule over the receipt chain and, when one breaks, names the receipt and the history head at that point. The same rules in Dogwood's formats sit beside the run with the projected trace, and the reference interpreter's replay must agree at every receipt. |
 | Which model answered? | `model-calls.jsonl`, `model-attestation.json` | Every call signed inside the provider's confidential machine; the Intel TDX quote that binds the signing key verified offline against the pinned Intel root. |
 | Was it made the way it says? | `provenance/*.sigstore.jsonl` | GitHub's build provenance for each file, verified offline against the pinned Sigstore trust root: workflow, repository, commit, run, and transparency-log entry. |
-| Whose keys? | `maintainer-key.json`, `grader-key.json` | Published here and on [scopeblind.com/how-it-works](https://scopeblind.com/how-it-works#key-custody). Gateway and harness keys are generated inside each workflow run and discarded with it; the provenance binds them. |
+| Whose keys? | `maintainer-key.json`, `grader-key.json` | Published here, at the repository root, and nowhere else yet. Runs made before 12 September 2026 were signed by an earlier maintainer key (recipient:27aa70064bb192c4), never published on its own; their READMEs say how to check them. Gateway and harness keys are generated inside each workflow run and discarded with it; the provenance binds them. |
 
 ## The runs
 
@@ -97,7 +98,7 @@ All attested swarm runs, newest first:
 
 Each run is a folder under [`swarm/`](swarm/) with the signed standard, the world (the ground truth, secrets withheld and digested), the grants and allocations, every receiver's hash-chained journal and every signed decision, one receipt chain per member with the calls behind it, and `outcomes.json`, which `harness/check-swarm.mjs` recomputes from the journals. On the attested route every member's model calls are signed inside the provider's TEE, as in the single-agent runs, and GitHub attests the swarm manifest, the standard, the outcomes, and every member manifest.
 
-Check a swarm run: `node harness/check-swarm.mjs swarm/<run>`. Read one member with the published verifier: `npx @veritasacta/verify swarm/<run>/agents/agent-1/manifest.json --standard swarm/<run>/standard.json --receipts swarm/<run>/agents/agent-1/receipts.jsonl --calls swarm/<run>/agents/agent-1/calls.jsonl --model-calls swarm/<run>/agents/agent-1/model-calls.jsonl --model-attestation swarm/<run>/agents/agent-1/model-attestation.json`.
+Check a swarm run: `node harness/check-swarm.mjs swarm/<run>`. Read one member with the published verifier: `npx @veritasacta/verify swarm/<run>/agents/agent-1/manifest.json --standard swarm/<run>/standard.json --receipts swarm/<run>/agents/agent-1/receipts.jsonl --calls swarm/<run>/agents/agent-1/calls.jsonl --model-calls swarm/<run>/agents/agent-1/model-calls.jsonl --model-attestation swarm/<run>/agents/agent-1/model-attestation.json --maintainer-key maintainer-key.json`. It exits 1: a member has no second grading, so its verdicts are the harness's word (`verdict_evidence`), and `check-swarm` recomputes the outcomes from the journals.
 
 What this does not show: the services are synthetic and in-process, the model is one open model at temperature zero, and a run is one sample.
 
@@ -149,7 +150,7 @@ The verifier reports `bound` when the manifest names that standard by digest, th
 
 ### Keys
 
-Runs made by the workflow use no demonstration keys. The maintainer key that signs each run's standard and the grader key that signs each second grading are persistent, held as repository secrets (`LEGATE_MAINTAINER_SEED`, `LEGATE_GRADER_SEED`) that never leave the workflow, and their verification keys are published here: [`maintainer-key.json`](maintainer-key.json) and [`grader-key.json`](grader-key.json). Pin them through a channel you trust: this repository, or the trust page. The gateway key and the harness key are generated inside each workflow run and discarded with it; the provenance binds the manifest that names them. A grading made elsewhere is accepted by the identity in its provenance bundle (`trust.accepted_grader_provenance`), not by a key listed in advance.
+Since 12 September 2026, runs made by the workflow use no demonstration keys. The maintainer key that signs each run's standard and the grader key that signs each second grading are persistent, held as repository secrets (`LEGATE_MAINTAINER_SEED`, `LEGATE_GRADER_SEED`) that never leave the workflow, and their verification keys are published here: [`maintainer-key.json`](maintainer-key.json) and [`grader-key.json`](grader-key.json). Pin them through a channel you trust; this repository is the only place they are published today. Runs made before the persistent keys were signed by an earlier maintainer key, recipient:27aa70064bb192c4, which was never published on its own. The gateway key and the harness key are generated inside each workflow run and discarded with it; the provenance binds the manifest that names them. A grading made elsewhere is accepted by the identity in its provenance bundle (`trust.accepted_grader_provenance`), not by a key listed in advance.
 
 ### An attested model route
 
